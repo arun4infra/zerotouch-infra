@@ -9,7 +9,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/arun4infra/zerotouch-infra.git
-    targetRevision: HEAD
+    targetRevision: feat/migrate-secrets-to-eso
     path: platform
     directory:
       recurse: false
