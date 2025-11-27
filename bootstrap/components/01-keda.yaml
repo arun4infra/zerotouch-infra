@@ -23,13 +23,15 @@ spec:
       - ServerSideApply=true  # Needed for large CRDs (scaledjobs.keda.sh)
       - RespectIgnoreDifferences=true  # Required for ignoreDifferences to work
   ignoreDifferences:
+    # 1. Ignore CA Bundle in APIService
     - group: apiregistration.k8s.io
       kind: APIService
       name: v1beta1.external.metrics.k8s.io
-      jqPathExpressions:
-        - '.spec.caBundle'  # Ignore TLS cert that KEDA regenerates
+      jsonPointers:
+        - /spec/caBundle
+    # 2. Ignore CA Bundle in ValidatingWebhookConfiguration
     - group: admissionregistration.k8s.io
       kind: ValidatingWebhookConfiguration
       name: keda-admission
-      jqPathExpressions:
-        - '.webhooks[0].clientConfig.caBundle'  # Ignore webhook TLS cert
+      jsonPointers:
+        - /webhooks/0/clientConfig/caBundle
