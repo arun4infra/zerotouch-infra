@@ -28,3 +28,8 @@ spec:
       name: v1beta1.external.metrics.k8s.io
       jqPathExpressions:
         - '.spec.caBundle'  # Ignore TLS cert that KEDA regenerates
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: keda-admission
+      jqPathExpressions:
+        - '.webhooks[0].clientConfig.caBundle'  # Ignore webhook TLS cert
