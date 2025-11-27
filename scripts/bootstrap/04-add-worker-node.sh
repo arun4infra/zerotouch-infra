@@ -105,7 +105,7 @@ log_info "✓ Node configuration found"
 # Step 3: Install Talos on worker
 log_info "Step 2: Installing Talos on worker node..."
 cd "$SCRIPT_DIR"
-./01-install-talos-rescue.sh \
+./02-install-talos-rescue.sh \
     --server-ip "$NODE_IP" \
     --user root \
     --password "$SERVER_PASSWORD" \
