@@ -8,9 +8,5 @@ docs/dev/platform-ref-multi-k8s
 .kiro
 docs
 
-# Bootstrap credentials
-scripts
-
 # Temporary files
 *.log
-/tmp/bootstrap/secrets/eso-bootstrap-secret.yaml
