@@ -102,6 +102,15 @@ if [ ! -f "$CONFIG_PATH" ]; then
 fi
 log_info "✓ Node configuration found"
 
+# Extract actual hostname from config (may differ from directory name)
+ACTUAL_HOSTNAME=$(grep -A 1 "hostname:" "$CONFIG_PATH" | grep "hostname:" | awk '{print $2}')
+if [ -z "$ACTUAL_HOSTNAME" ]; then
+    log_warn "Could not extract hostname from config, using directory name: $NODE_NAME"
+    ACTUAL_HOSTNAME="$NODE_NAME"
+else
+    log_info "✓ Detected hostname from config: $ACTUAL_HOSTNAME"
+fi
+
 # Step 3: Install Talos on worker
 log_info "Step 2: Installing Talos on worker node..."
 cd "$SCRIPT_DIR"
@@ -140,26 +149,26 @@ log_info "Step 5: Waiting 60 seconds for node to join cluster..."
 sleep 60
 
 # Step 7: Verify node joined and reached Ready status
-log_info "Step 6: Verifying node status..."
+log_info "Step 6: Verifying node status (looking for hostname: $ACTUAL_HOSTNAME)..."
 MAX_RETRIES=10
 RETRY_COUNT=0
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    if kubectl get node "$NODE_NAME" &> /dev/null; then
-        log_info "✓ Node $NODE_NAME has joined the cluster"
+    if kubectl get node "$ACTUAL_HOSTNAME" &> /dev/null; then
+        log_info "✓ Node $ACTUAL_HOSTNAME has joined the cluster"
         
         # Check if node is Ready
-        NODE_STATUS=$(kubectl get node "$NODE_NAME" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+        NODE_STATUS=$(kubectl get node "$ACTUAL_HOSTNAME" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
         if [ "$NODE_STATUS" == "True" ]; then
-            log_info "✓ Node $NODE_NAME is Ready"
+            log_info "✓ Node $ACTUAL_HOSTNAME is Ready"
             break
         else
-            log_warn "Node $NODE_NAME is not Ready yet. Waiting..."
+            log_warn "Node $ACTUAL_HOSTNAME is not Ready yet. Waiting..."
             sleep 30
             RETRY_COUNT=$((RETRY_COUNT + 1))
         fi
     else
-        log_warn "Node $NODE_NAME not found yet. Waiting..."
+        log_warn "Node $ACTUAL_HOSTNAME not found yet. Waiting..."
         sleep 30
         RETRY_COUNT=$((RETRY_COUNT + 1))
     fi
@@ -173,8 +182,8 @@ fi
 
 # Step 8: Verify labels and taints
 log_info "Step 7: Verifying node labels and taints..."
-kubectl get node "$NODE_NAME" -o yaml | grep -A 5 "labels:" || true
-kubectl get node "$NODE_NAME" -o yaml | grep -A 5 "taints:" || true
+kubectl get node "$ACTUAL_HOSTNAME" -o yaml | grep -A 5 "labels:" || true
+kubectl get node "$ACTUAL_HOSTNAME" -o yaml | grep -A 5 "taints:" || true
 
 # Final summary
 echo ""
@@ -182,12 +191,13 @@ echo -e "${BLUE}╔════════════════════�
 echo -e "${BLUE}║         Worker Node Added Successfully!                     ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "${GREEN}✓ Node Name: $NODE_NAME${NC}"
+echo -e "${GREEN}✓ Config Directory: $NODE_NAME${NC}"
+echo -e "${GREEN}✓ Node Hostname: $ACTUAL_HOSTNAME${NC}"
 echo -e "${GREEN}✓ Node IP: $NODE_IP${NC}"
 echo -e "${GREEN}✓ Node Role: $NODE_ROLE${NC}"
 echo -e "${GREEN}✓ Status: Ready${NC}"
 echo ""
 echo -e "${YELLOW}Verify with:${NC}"
 echo -e "  kubectl get nodes"
-echo -e "  kubectl describe node $NODE_NAME"
+echo -e "  kubectl describe node $ACTUAL_HOSTNAME"
 echo ""
