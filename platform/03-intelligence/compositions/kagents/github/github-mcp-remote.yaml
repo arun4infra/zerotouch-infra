@@ -2,7 +2,7 @@ apiVersion: kagent.dev/v1alpha2
 kind: RemoteMCPServer
 metadata:
   name: github-mcp-remote
-  namespace: intelligence
+  namespace: intelligence-platform
 spec:
   description: GitHub Copilot MCP Server
   url: https://api.githubcopilot.com/mcp/

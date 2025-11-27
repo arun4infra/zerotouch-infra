@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: qdrant-mcp
-  namespace: intelligence
+  namespace: intelligence-platform
   labels:
     app.kubernetes.io/name: qdrant-mcp
 spec:
@@ -23,7 +23,7 @@ spec:
           imagePullPolicy: Always
           env:
             - name: QDRANT_URL
-              value: "http://qdrant.intelligence.svc.cluster.local:6333"
+              value: "http://qdrant.intelligence-platform.svc.cluster.local:6333"
             - name: COLLECTION_NAME
               value: "librarian-memory"
             - name: FASTMCP_HOST

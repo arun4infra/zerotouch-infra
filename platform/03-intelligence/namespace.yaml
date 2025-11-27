@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: intelligence
+  name: intelligence-platform
   labels:
-    name: intelligence
+    name: intelligence-platform
     layer: intelligence
     # Allow local-path-provisioner helper pods (require privileged + hostPath)
     pod-security.kubernetes.io/enforce: privileged

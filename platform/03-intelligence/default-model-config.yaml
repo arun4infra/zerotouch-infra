@@ -2,7 +2,7 @@ apiVersion: kagent.dev/v1alpha2
 kind: ModelConfig
 metadata:
   name: default-model-config
-  namespace: intelligence
+  namespace: intelligence-platform
 spec:
   apiKeySecret: kagent-openai
   apiKeySecretKey: OPENAI_API_KEY

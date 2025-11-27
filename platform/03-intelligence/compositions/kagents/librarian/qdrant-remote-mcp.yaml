@@ -2,8 +2,8 @@ apiVersion: kagent.dev/v1alpha2
 kind: RemoteMCPServer
 metadata:
   name: qdrant-mcp
-  namespace: intelligence
+  namespace: intelligence-platform
 spec:
   protocol: STREAMABLE_HTTP
-  url: "http://qdrant-mcp.intelligence.svc.cluster.local:8000/mcp"
+  url: "http://qdrant-mcp.intelligence-platform.svc.cluster.local:8000/mcp"
   description: "Qdrant Vector Database MCP Server (Streamable HTTP Transport)"

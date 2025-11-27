@@ -2,7 +2,7 @@ apiVersion: kagent.dev/v1alpha2
 kind: Agent
 metadata:
   name: librarian-agent
-  namespace: intelligence
+  namespace: intelligence-platform
 spec:
   type: Declarative
   declarative:
