@@ -15,6 +15,14 @@ spec:
       parameters:
         - name: providers.default
           value: openAI
+      values: |
+        # Schedule kagent agents on worker nodes
+        agents:
+          nodeSelector:
+            workload-type: stateful
+        # Keep controller on control plane (lightweight)
+        controller:
+          nodeSelector: {}
   destination:
     server: https://kubernetes.default.svc
     namespace: kagent
