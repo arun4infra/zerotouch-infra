@@ -13,4 +13,4 @@ scripts
 
 # Temporary files
 *.log
-/tmp/
+/tmp/bootstrap/secrets/eso-bootstrap-secret.yaml
