@@ -3,7 +3,13 @@
 ## New Cluster Setup
 
 ### Step 1: Bootstrap Cluster
+
+**Option A: With AWS credentials (recommended)**
 ```bash
+# Export AWS credentials
+export AWS_ACCESS_KEY_ID="your-key-id"
+export AWS_SECRET_ACCESS_KEY="your-secret-key"
+
 # Single node cluster
 ./scripts/bootstrap/01-master-bootstrap.sh <server-ip> <root-password>
 
@@ -13,8 +19,12 @@
   --worker-password <worker-password>
 ```
 
-### Step 2: Inject ESO Credentials
+**Option B: Inject credentials manually after bootstrap**
 ```bash
+# Bootstrap without credentials
+./scripts/bootstrap/01-master-bootstrap.sh <server-ip> <root-password>
+
+# Then inject ESO credentials
 ./scripts/bootstrap/03-inject-secrets.sh <AWS_ACCESS_KEY_ID> <AWS_SECRET_ACCESS_KEY>
 ```
 
@@ -48,9 +58,15 @@ kubectl port-forward -n argocd svc/argocd-server 8080:443
    - Calls 02-install-talos-rescue.sh (installs Talos)
    - Bootstraps Kubernetes cluster
    - Calls 03-install-argocd.sh (installs ArgoCD)
-   - ArgoCD deploys all platform components
+   - **Waits for platform-bootstrap to sync** (with timeout)
+   - **Verifies all child Applications are created**
+   - **Auto-injects ESO credentials** (if AWS env vars are set)
+   - **Waits for ESO to become ready**
+   - **Fails fast** if sync errors occur
 
-2. **03-inject-secrets.sh** - Manual step after bootstrap
+2. **03-inject-secrets.sh** - ESO credential injection
+   - Can be called automatically by master script (if AWS env vars set)
+   - Or run manually after bootstrap
    - Injects AWS credentials for ESO
    - Enables secret sync from AWS SSM Parameter Store
 
