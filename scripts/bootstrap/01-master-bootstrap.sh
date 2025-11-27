@@ -185,7 +185,54 @@ echo -e "${YELLOW}[3/5] Bootstrapping ArgoCD...${NC}"
 echo "────────────────────────────────────────────────────────────────"
 ./03-install-argocd.sh
 
-echo -e "\n${GREEN}✓ ArgoCD bootstrap complete${NC}\n"
+echo -e "\n${GREEN}✓ ArgoCD installed${NC}\n"
+
+# Step 3.1: Wait for platform-bootstrap to sync
+echo -e "${BLUE}⏳ Waiting for platform-bootstrap to sync (timeout: 5 minutes)...${NC}"
+TIMEOUT=300
+ELAPSED=0
+while [ $ELAPSED -lt $TIMEOUT ]; do
+    SYNC_STATUS=$(kubectl get application platform-bootstrap -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
+    HEALTH_STATUS=$(kubectl get application platform-bootstrap -n argocd -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Unknown")
+    
+    if [ "$SYNC_STATUS" = "Synced" ] && [ "$HEALTH_STATUS" = "Healthy" ]; then
+        echo -e "${GREEN}✓ platform-bootstrap synced successfully${NC}"
+        break
+    fi
+    
+    if [ "$SYNC_STATUS" = "OutOfSync" ] || [ "$HEALTH_STATUS" = "Degraded" ]; then
+        echo -e "${YELLOW}⚠️  Status: $SYNC_STATUS / $HEALTH_STATUS - waiting...${NC}"
+    fi
+    
+    sleep 10
+    ELAPSED=$((ELAPSED + 10))
+done
+
+if [ $ELAPSED -ge $TIMEOUT ]; then
+    echo -e "${RED}✗ Timeout waiting for platform-bootstrap to sync${NC}"
+    echo -e "${YELLOW}Check status: kubectl describe application platform-bootstrap -n argocd${NC}"
+    exit 1
+fi
+
+# Step 3.2: Verify child Applications were created
+echo -e "${BLUE}Verifying child Applications...${NC}"
+sleep 10
+EXPECTED_APPS=("crossplane-operator" "external-secrets" "keda" "kagent" "intelligence" "foundation-config" "databases")
+MISSING_APPS=()
+
+for app in "${EXPECTED_APPS[@]}"; do
+    if ! kubectl get application "$app" -n argocd &>/dev/null; then
+        MISSING_APPS+=("$app")
+    fi
+done
+
+if [ ${#MISSING_APPS[@]} -gt 0 ]; then
+    echo -e "${RED}✗ Missing Applications: ${MISSING_APPS[*]}${NC}"
+    echo -e "${YELLOW}Check platform-bootstrap status: kubectl describe application platform-bootstrap -n argocd${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}✓ All child Applications created${NC}\n"
 
 # Extract ArgoCD password
 ARGOCD_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>/dev/null | base64 -d || echo "NOT_GENERATED")
@@ -280,11 +327,39 @@ fi
 # Step 4: Inject ESO Bootstrap Secret
 echo -e "${YELLOW}[4/5] Injecting ESO Bootstrap Secret...${NC}"
 echo "────────────────────────────────────────────────────────────────"
-echo -e "${BLUE}ℹ  You need to manually inject AWS credentials for External Secrets Operator${NC}"
-echo -e "${BLUE}   Run: ./scripts/bootstrap/03-inject-secrets.sh <AWS_ACCESS_KEY_ID> <AWS_SECRET_ACCESS_KEY>${NC}"
-echo ""
-echo -e "${YELLOW}⚠️  IMPORTANT: ESO needs AWS credentials to sync secrets from Parameter Store${NC}"
-echo ""
+
+# Check if AWS credentials are provided via environment variables
+if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
+    echo -e "${BLUE}Using AWS credentials from environment variables${NC}"
+    ./03-inject-secrets.sh "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY"
+    
+    # Wait for ESO to sync
+    echo -e "${BLUE}⏳ Waiting for ESO to sync secrets (timeout: 2 minutes)...${NC}"
+    TIMEOUT=120
+    ELAPSED=0
+    while [ $ELAPSED -lt $TIMEOUT ]; do
+        STORE_STATUS=$(kubectl get clustersecretstore aws-parameter-store -o jsonpath='{.status.conditions[0].status}' 2>/dev/null || echo "Unknown")
+        
+        if [ "$STORE_STATUS" = "True" ]; then
+            echo -e "${GREEN}✓ ESO credentials configured and working${NC}"
+            break
+        fi
+        
+        sleep 10
+        ELAPSED=$((ELAPSED + 10))
+    done
+    
+    if [ $ELAPSED -ge $TIMEOUT ]; then
+        echo -e "${YELLOW}⚠️  ESO not ready yet - secrets may sync later${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠️  AWS credentials not provided via environment variables${NC}"
+    echo -e "${BLUE}ℹ  You need to manually inject AWS credentials for External Secrets Operator${NC}"
+    echo -e "${BLUE}   Run: ./scripts/bootstrap/03-inject-secrets.sh <AWS_ACCESS_KEY_ID> <AWS_SECRET_ACCESS_KEY>${NC}"
+    echo ""
+    echo -e "${YELLOW}⚠️  IMPORTANT: ESO needs AWS credentials to sync secrets from Parameter Store${NC}"
+    echo ""
+fi
 
 cat >> "$CREDENTIALS_FILE" << EOF
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -346,11 +421,16 @@ echo -e "${YELLOW}📝 Credentials saved to:${NC}"
 echo -e "   ${GREEN}$CREDENTIALS_FILE${NC}"
 echo ""
 echo -e "${YELLOW}📌 Next Steps:${NC}"
-echo -e "   1. Review credentials file and ${RED}BACK UP${NC} important credentials"
-echo -e "   2. Inject ESO credentials: ${GREEN}./scripts/bootstrap/03-inject-secrets.sh <AWS_KEY> <AWS_SECRET>${NC}"
-echo -e "   3. Port-forward ArgoCD UI: ${GREEN}kubectl port-forward -n argocd svc/argocd-server 8080:443${NC}"
-echo -e "   4. Wait for ArgoCD to deploy all applications (check with: ${GREEN}kubectl get applications -n argocd${NC})"
-echo -e "   5. Validate cluster: ${GREEN}./scripts/validate-cluster.sh${NC}"
+if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+    echo -e "   1. ${RED}IMPORTANT:${NC} Inject ESO credentials: ${GREEN}./scripts/bootstrap/03-inject-secrets.sh <AWS_KEY> <AWS_SECRET>${NC}"
+    echo -e "   2. Review credentials file and ${RED}BACK UP${NC} important credentials"
+    echo -e "   3. Port-forward ArgoCD UI: ${GREEN}kubectl port-forward -n argocd svc/argocd-server 8080:443${NC}"
+    echo -e "   4. Validate cluster: ${GREEN}./scripts/validate-cluster.sh${NC}"
+else
+    echo -e "   1. Review credentials file and ${RED}BACK UP${NC} important credentials"
+    echo -e "   2. Port-forward ArgoCD UI: ${GREEN}kubectl port-forward -n argocd svc/argocd-server 8080:443${NC}"
+    echo -e "   3. Validate cluster: ${GREEN}./scripts/validate-cluster.sh${NC}"
+fi
 echo ""
 echo -e "${BLUE}Happy deploying! 🚀${NC}"
 echo ""
