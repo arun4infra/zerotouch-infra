@@ -3,6 +3,8 @@ kind: Application
 metadata:
   name: databases
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
@@ -13,10 +15,10 @@ spec:
     path: platform/05-databases
   destination:
     server: https://kubernetes.default.svc
-    namespace: databases
+    # No namespace - XRDs and Compositions are cluster-scoped
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
-      - CreateNamespace=true
+      - ServerSideApply=true
