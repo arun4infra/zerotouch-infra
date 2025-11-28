@@ -331,7 +331,7 @@ echo "────────────────────────�
 # Check if AWS credentials are provided via environment variables
 if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
     echo -e "${BLUE}Using AWS credentials from environment variables${NC}"
-    ./03-inject-secrets.sh "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY"
+    ./05-inject-secrets.sh "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY"
     
     # Wait for ESO to sync
     echo -e "${BLUE}⏳ Waiting for ESO to sync secrets (timeout: 2 minutes)...${NC}"
@@ -355,7 +355,7 @@ if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
 else
     echo -e "${YELLOW}⚠️  AWS credentials not provided via environment variables${NC}"
     echo -e "${BLUE}ℹ  You need to manually inject AWS credentials for External Secrets Operator${NC}"
-    echo -e "${BLUE}   Run: ./scripts/bootstrap/03-inject-secrets.sh <AWS_ACCESS_KEY_ID> <AWS_SECRET_ACCESS_KEY>${NC}"
+    echo -e "${BLUE}   Run: ./scripts/bootstrap/05-inject-secrets.sh <AWS_ACCESS_KEY_ID> <AWS_SECRET_ACCESS_KEY>${NC}"
     echo ""
     echo -e "${YELLOW}⚠️  IMPORTANT: ESO needs AWS credentials to sync secrets from Parameter Store${NC}"
     echo ""
@@ -372,7 +372,7 @@ Required AWS Parameters:
   - /zerotouch/prod/kagent/openai_api_key
 
 Inject ESO credentials:
-  ./scripts/bootstrap/03-inject-secrets.sh <AWS_ACCESS_KEY_ID> <AWS_SECRET_ACCESS_KEY>
+  ./scripts/bootstrap/05-inject-secrets.sh <AWS_ACCESS_KEY_ID> <AWS_SECRET_ACCESS_KEY>
 
 Verify ESO is working:
   kubectl get clustersecretstore aws-parameter-store

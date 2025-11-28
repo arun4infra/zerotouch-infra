@@ -63,29 +63,6 @@ jobs:
           
           echo "✓ ArgoCD installed successfully"
 
-      - name: Inject ESO bootstrap secret using bootstrap script
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
-          echo "Injecting ESO bootstrap secret using existing script..."
-          
-          # Make script executable
-          chmod +x scripts/bootstrap/03-inject-secrets.sh
-          
-          # Run the script with AWS credentials
-          ./scripts/bootstrap/03-inject-secrets.sh "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY"
-          
-          echo "✓ ESO bootstrap secret created"
-
-      - name: Create test OpenAI secret in AWS Parameter Store path
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          echo "Note: Using real OpenAI API key from GitHub Secrets"
-          echo "ESO will fetch from AWS Parameter Store: /zerotouch/prod/kagent/openai_api_key"
-          echo "✓ Credentials configured"
-
       - name: Label k3d nodes for workload placement
         run: |
           echo "Labeling k3d nodes to support workload selectors..."
@@ -123,6 +100,134 @@ jobs:
           
           echo "ArgoCD Applications:"
           kubectl get applications -n argocd
+
+      - name: Wait for external-secrets namespace to be created
+        run: |
+          echo "Waiting for ArgoCD to create external-secrets namespace..."
+          
+          TIMEOUT=120
+          ELAPSED=0
+          while [ $ELAPSED -lt $TIMEOUT ]; do
+            if kubectl get namespace external-secrets &>/dev/null; then
+              echo "✓ external-secrets namespace exists"
+              break
+            fi
+            echo "Waiting for external-secrets namespace... (${ELAPSED}s / ${TIMEOUT}s)"
+            sleep 5
+            ELAPSED=$((ELAPSED + 5))
+          done
+          
+          if [ $ELAPSED -ge $TIMEOUT ]; then
+            echo "✗ Timeout waiting for external-secrets namespace"
+            exit 1
+          fi
+
+      - name: Inject ESO bootstrap secret using bootstrap script
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          echo "Injecting ESO bootstrap secret using existing script..."
+          
+          # Make script executable
+          chmod +x scripts/bootstrap/05-inject-secrets.sh
+          
+          # Run the script with AWS credentials
+          ./scripts/bootstrap/05-inject-secrets.sh "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY"
+          
+          echo "✓ ESO bootstrap secret created"
+
+      - name: Verify ESO is working
+        run: |
+          echo "Verifying External Secrets Operator is working..."
+          echo ""
+          
+          # Wait for ESO pods to be ready
+          echo "Waiting for ESO pods to be ready..."
+          kubectl wait --for=condition=ready pod \
+            -l app.kubernetes.io/name=external-secrets \
+            -n external-secrets \
+            --timeout=120s
+          
+          echo "✓ ESO pods are ready"
+          echo ""
+          
+          # Wait for ClusterSecretStore to be ready
+          echo "Waiting for ClusterSecretStore to be ready..."
+          TIMEOUT=120
+          ELAPSED=0
+          while [ $ELAPSED -lt $TIMEOUT ]; do
+            STORE_STATUS=$(kubectl get clustersecretstore aws-parameter-store -o jsonpath='{.status.conditions[0].status}' 2>/dev/null || echo "Unknown")
+            
+            if [ "$STORE_STATUS" = "True" ]; then
+              echo "✓ ClusterSecretStore is ready"
+              break
+            fi
+            
+            echo "ClusterSecretStore status: $STORE_STATUS (${ELAPSED}s / ${TIMEOUT}s)"
+            sleep 5
+            ELAPSED=$((ELAPSED + 5))
+          done
+          
+          if [ $ELAPSED -ge $TIMEOUT ]; then
+            echo "✗ Timeout waiting for ClusterSecretStore"
+            kubectl describe clustersecretstore aws-parameter-store
+            exit 1
+          fi
+          
+          echo ""
+          echo "ClusterSecretStore status:"
+          kubectl get clustersecretstore aws-parameter-store
+          echo ""
+          
+          # Wait for ExternalSecrets to sync
+          echo "Waiting for ExternalSecrets to sync..."
+          TIMEOUT=120
+          ELAPSED=0
+          while [ $ELAPSED -lt $TIMEOUT ]; do
+            # Check if any ExternalSecrets exist
+            ES_COUNT=$(kubectl get externalsecret -A --no-headers 2>/dev/null | wc -l | tr -d ' ')
+            
+            if [ "$ES_COUNT" -gt 0 ]; then
+              # Check if all are synced
+              SYNCED=$(kubectl get externalsecret -A -o json | jq '[.items[] | select(.status.conditions[0].status == "True")] | length')
+              
+              if [ "$SYNCED" -eq "$ES_COUNT" ]; then
+                echo "✓ All $ES_COUNT ExternalSecrets are synced"
+                break
+              fi
+              
+              echo "ExternalSecrets synced: $SYNCED/$ES_COUNT (${ELAPSED}s / ${TIMEOUT}s)"
+            else
+              echo "No ExternalSecrets found yet... (${ELAPSED}s / ${TIMEOUT}s)"
+            fi
+            
+            sleep 5
+            ELAPSED=$((ELAPSED + 5))
+          done
+          
+          echo ""
+          echo "ExternalSecret status:"
+          kubectl get externalsecret -A
+          echo ""
+          
+          # Verify secrets were created
+          echo "Verifying secrets were created:"
+          
+          if kubectl get secret kagent-openai -n kagent &>/dev/null; then
+            echo "✓ Secret kagent-openai exists in kagent namespace"
+          else
+            echo "⚠️  Secret kagent-openai not found in kagent namespace"
+          fi
+          
+          if kubectl get secret kagent-openai -n intelligence-platform &>/dev/null; then
+            echo "✓ Secret kagent-openai exists in intelligence-platform namespace"
+          else
+            echo "⚠️  Secret kagent-openai not found in intelligence-platform namespace"
+          fi
+          
+          echo ""
+          echo "✓ ESO verification complete"
 
       - name: Wait for ArgoCD to sync all applications
         run: |
