@@ -73,7 +73,9 @@ echo "$APPS" | jq -r '.items[] | "\(.metadata.name)|\(.status.sync.status // "Un
     if [[ "$sync" == "Synced" && "$health" == "Healthy" ]]; then
         echo -e "  ✅ ${GREEN}$name${NC}: Synced & Healthy"
     elif [[ "$sync" == "Synced" && "$health" == "Progressing" ]]; then
-        echo -e "  ⚠️  ${YELLOW}$name${NC}: Synced & Progressing"
+        echo -e "  ⚠️  ${YELLOW}$name${NC}: Synced & Progressing (pods still starting)"
+        # Progressing means pods are not fully ready yet - this should be a warning but not a failure
+        # The wait-for-pods script should handle waiting for pods to be ready
     elif [[ "$sync" == "OutOfSync" && "$health" == "Healthy" && "$IS_IGNORED" == "true" ]]; then
         echo -e "  ⚠️  ${YELLOW}$name${NC}: OutOfSync but Healthy (ignored)"
     elif [[ "$sync" == "OutOfSync" && "$health" == "Healthy" ]]; then
@@ -92,12 +94,9 @@ echo ""
 echo "🏢 Critical Namespaces:"
 echo "------------------------------------------"
 
-# Core infrastructure namespaces (must be fully ready)
-CORE_NAMESPACES=("argocd" "external-secrets" "crossplane-system" "keda")
-# Application namespaces (may have pods waiting for dependencies)
-APP_NAMESPACES=("kagent" "intelligence-platform")
+ALL_NAMESPACES=("argocd" "external-secrets" "crossplane-system" "keda" "kagent" "intelligence-platform")
 
-for ns in "${CORE_NAMESPACES[@]}"; do
+for ns in "${ALL_NAMESPACES[@]}"; do
     if kubectl get namespace "$ns" &>/dev/null; then
         TOTAL_PODS=$(kubectl get pods -n "$ns" --no-headers 2>/dev/null | wc -l | tr -d ' ')
         READY_PODS=$(kubectl get pods -n "$ns" --field-selector=status.phase=Running -o json 2>/dev/null | jq '[.items[] | select(.status.conditions[] | select(.type=="Ready" and .status=="True"))] | length')
@@ -117,22 +116,6 @@ for ns in "${CORE_NAMESPACES[@]}"; do
     else
         echo -e "  ❌ ${RED}$ns${NC}: Namespace not found"
         ((FAILED++)) || true
-    fi
-done
-
-# Check application namespaces (informational only, don't fail)
-for ns in "${APP_NAMESPACES[@]}"; do
-    if kubectl get namespace "$ns" &>/dev/null; then
-        TOTAL_PODS=$(kubectl get pods -n "$ns" --no-headers 2>/dev/null | wc -l | tr -d ' ')
-        READY_PODS=$(kubectl get pods -n "$ns" --field-selector=status.phase=Running -o json 2>/dev/null | jq '[.items[] | select(.status.conditions[] | select(.type=="Ready" and .status=="True"))] | length')
-        
-        if [[ "$TOTAL_PODS" -eq 0 ]]; then
-            echo -e "  ⚠️  ${YELLOW}$ns${NC}: No pods (may be expected)"
-        elif [[ "$READY_PODS" -eq "$TOTAL_PODS" ]]; then
-            echo -e "  ✅ ${GREEN}$ns${NC}: $READY_PODS/$TOTAL_PODS pods ready"
-        else
-            echo -e "  ⚠️  ${YELLOW}$ns${NC}: $READY_PODS/$TOTAL_PODS pods ready (may be waiting for dependencies)"
-        fi
     fi
 done
 

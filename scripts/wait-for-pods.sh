@@ -22,13 +22,10 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Core infrastructure namespaces that must be ready
-CRITICAL_NAMESPACES=("argocd" "external-secrets" "crossplane-system" "keda")
+# All namespaces that must have pods ready
+ALL_NAMESPACES=("argocd" "external-secrets" "crossplane-system" "keda" "kagent" "intelligence-platform")
 
-# Application namespaces (optional - may have pods waiting for dependencies)
-APP_NAMESPACES=("kagent" "intelligence-platform")
-
-echo "Waiting for core infrastructure pods to be ready..."
+echo "Waiting for all pods to be ready..."
 echo "Timeout: ${TIMEOUT}s"
 echo ""
 
@@ -39,7 +36,7 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     
     ALL_READY=true
     
-    for ns in "${CRITICAL_NAMESPACES[@]}"; do
+    for ns in "${ALL_NAMESPACES[@]}"; do
         if ! kubectl get namespace "$ns" &>/dev/null; then
             echo "  $ns: namespace not found (may not be deployed yet)"
             ALL_READY=false
@@ -75,20 +72,7 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     echo ""
     
     if [ "$ALL_READY" = true ]; then
-        echo "✓ All core infrastructure pods are ready!"
-        echo ""
-        echo "Application namespace status (informational):"
-        for ns in "${APP_NAMESPACES[@]}"; do
-            if kubectl get namespace "$ns" &>/dev/null; then
-                TOTAL=$(kubectl get pods -n "$ns" --no-headers 2>/dev/null | wc -l | tr -d ' ')
-                READY=$(kubectl get pods -n "$ns" -o json 2>/dev/null | jq '[.items[] | select(.status.conditions[] | select(.type=="Ready" and .status=="True"))] | length')
-                if [[ "$TOTAL" -eq 0 ]]; then
-                    echo "  $ns: no pods"
-                else
-                    echo "  $ns: $READY/$TOTAL ready"
-                fi
-            fi
-        done
+        echo "✓ All pods are ready!"
         exit 0
     fi
     
@@ -96,10 +80,10 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     ELAPSED=$((ELAPSED + CHECK_INTERVAL))
 done
 
-echo "✗ Timeout waiting for core infrastructure pods"
+echo "✗ Timeout waiting for pods to be ready"
 echo ""
 echo "Final pod status:"
-for ns in "${CRITICAL_NAMESPACES[@]}" "${APP_NAMESPACES[@]}"; do
+for ns in "${ALL_NAMESPACES[@]}"; do
     if kubectl get namespace "$ns" &>/dev/null; then
         echo ""
         echo "=== $ns ==="
