@@ -41,9 +41,7 @@ jobs:
                 required_status_checks: {
                   strict: true,
                   contexts: [
-                    'validate-manifests',
-                    'argocd-diff', 
-                    'smoke-test'
+                    'integration-test'
                   ]
                 },
                 enforce_admins: false,
@@ -57,12 +55,10 @@ jobs:
               
               console.log('✅ Branch protection configured successfully!');
               console.log('');
-              console.log('Required status checks:');
-              console.log('  - validate-manifests');
-              console.log('  - argocd-diff');
-              console.log('  - smoke-test');
+              console.log('Required status check:');
+              console.log('  - integration-test (full platform bootstrap test)');
               console.log('');
-              console.log('PRs to main now require these checks to pass before merging.');
+              console.log('PRs to main now require this comprehensive test to pass before merging.');
               
             } catch (error) {
               console.error('❌ Failed to set up branch protection:', error.message);
@@ -73,7 +69,7 @@ jobs:
               console.log('  3. GITHUB_TOKEN lacks required permissions');
               console.log('');
               console.log('Try setting it up manually via GitHub UI instead.');
-              console.log('See .github/BRANCH_PROTECTION_SETUP.md for instructions.');
+              console.log('Go to: Settings → Branches → Add rule → Require status check: integration-test');
               throw error;
             }
 

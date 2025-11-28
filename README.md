@@ -64,7 +64,7 @@ We chose specific tools to minimize "Day 2" complexity.
 | :--- | :--- | :--- |
 | **OS** | **Talos Linux** | Immutable, API-driven, maintenance-free. |
 | **GitOps** | **ArgoCD** | Standardizes deployment. Handles "App-of-Apps" pattern. |
-| **Secrets** | **External Secrets** | Syncs from GitHub Secrets. No local `.env` files or decryption keys. |
+| **Secrets** | **External Secrets Operator** | Syncs from AWS Parameter Store. No local `.env` files or manual secret management. |
 | **Provisioning** | **Crossplane** | Allows us to define "Legos" (XRDs) like `XPostgres` or `XWebService`. |
 | **Database** | **CloudNativePG** | Enterprise-grade HA, automated failover, and Point-In-Time Recovery. |
 | **Messaging** | **NATS** | Simpler than Kafka, lighter than RabbitMQ. Ideal for agentic control planes. |
@@ -124,20 +124,58 @@ We adhere to an **Aerospace-Grade** data safety specification:
 ## 7. Getting Started
 
 ### Prerequisites
-*   Talos Cluster (Running)
-*   `kubectl` (For initial bootstrap only)
-*   GitHub Repository Secrets configured
+*   Hetzner dedicated server (or compatible bare metal)
+*   AWS account with Parameter Store access
+*   `kubectl`, `talosctl`, `helm` installed locally
 
 ### Bootstrap
-We use a single script to install the GitOps engine. After that, the engine installs the rest.
 
+We use automated scripts to provision the entire platform from scratch.
+
+#### Single Node Cluster
 ```bash
-# 1. Install ArgoCD
-./scripts/bootstrap/install-argocd.sh
+# Bootstrap control plane with Talos + ArgoCD + Platform
+./scripts/bootstrap/01-master-bootstrap.sh <server-ip> <root-password>
 
-# 2. Apply the Root Application
-kubectl apply -f bootstrap/root-app.yaml
+# Inject AWS credentials for External Secrets Operator
+export AWS_ACCESS_KEY_ID="your-key"
+export AWS_SECRET_ACCESS_KEY="your-secret"
+./scripts/bootstrap/03-inject-secrets.sh $AWS_ACCESS_KEY_ID $AWS_SECRET_ACCESS_KEY
+```
 
-# 3. Watch the Magic
-watch kubectl get applications -n argocd
+#### Multi-Node Cluster
+```bash
+# Bootstrap with worker nodes
+./scripts/bootstrap/01-master-bootstrap.sh <control-plane-ip> <root-password> \
+  --worker-nodes worker01:95.216.151.243 \
+  --worker-password <worker-password>
+```
+
+#### Validate Deployment
+```bash
+# Check all applications are synced and healthy
+./scripts/validate-cluster.sh
+```
+
+### Secrets Management
+
+Secrets are stored in **AWS Systems Manager Parameter Store** and synced to the cluster via External Secrets Operator (ESO).
+
+**Required Parameters:**
+- `/zerotouch/prod/kagent/openai_api_key` - OpenAI API key for Kagent agents
+
+**Setup:**
+```bash
+# Store secrets in AWS Parameter Store
+aws ssm put-parameter \
+  --name /zerotouch/prod/kagent/openai_api_key \
+  --value "sk-..." \
+  --type SecureString
+
+# Inject ESO credentials into cluster
+./scripts/bootstrap/03-inject-secrets.sh <AWS_ACCESS_KEY_ID> <AWS_SECRET_ACCESS_KEY>
+
+# Verify secrets are syncing
+kubectl get externalsecret -A
+kubectl get clustersecretstore aws-parameter-store
 ```
