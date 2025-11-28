@@ -442,6 +442,36 @@ jobs:
             exit 1
           fi
 
+      - name: Wait for Progressing apps to become Healthy
+        run: |
+          echo "Waiting for all Progressing apps to become fully Healthy..."
+          
+          TIMEOUT=300
+          ELAPSED=0
+          
+          while [ $ELAPSED -lt $TIMEOUT ]; do
+            PROGRESSING=$(kubectl get applications -n argocd -o json | jq -r '[.items[] | select(.status.health.status == "Progressing")] | .[].metadata.name')
+            
+            if [ -z "$PROGRESSING" ]; then
+              echo "✓ All apps are fully Healthy (no Progressing apps)"
+              break
+            fi
+            
+            echo "Progressing apps (${ELAPSED}s / ${TIMEOUT}s):"
+            while read -r app; do
+              if [ -n "$app" ]; then
+                echo "  - $app"
+              fi
+            done <<< "$PROGRESSING"
+            
+            sleep 10
+            ELAPSED=$((ELAPSED + 10))
+          done
+          
+          if [ $ELAPSED -ge $TIMEOUT ]; then
+            echo "⚠️  Some apps still Progressing after timeout, proceeding with validation..."
+          fi
+
       - name: Run cluster validation using existing script
         run: |
           echo "Running comprehensive cluster validation..."
