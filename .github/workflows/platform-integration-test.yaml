@@ -235,7 +235,7 @@ jobs:
           
           # Load ignore list
           IGNORE_APPS=()
-          if [ -f ".github/ci-ignore-apps.txt" ]; then
+          if [ -f ".github/ci-ignore-oos-apps.txt" ]; then
             echo "Loading CI ignore list..."
             while IFS= read -r line; do
               # Skip comments and empty lines
@@ -244,7 +244,7 @@ jobs:
               # Extract app name (before any comment)
               app=$(echo "$line" | sed 's/#.*//' | xargs)
               [[ -n "$app" ]] && IGNORE_APPS+=("$app")
-            done < ".github/ci-ignore-apps.txt"
+            done < ".github/ci-ignore-oos-apps.txt"
             
             if [ ${#IGNORE_APPS[@]} -gt 0 ]; then
               echo "Ignoring apps: ${IGNORE_APPS[*]}"
@@ -295,13 +295,22 @@ jobs:
             
             # Build jq filter to exclude ignored apps
             IGNORE_FILTER=""
-            for ignore_app in "${IGNORE_APPS[@]}"; do
-              IGNORE_FILTER="$IGNORE_FILTER and .metadata.name != \"$ignore_app\""
-            done
+            if [ ${#IGNORE_APPS[@]} -gt 0 ]; then
+              for ignore_app in "${IGNORE_APPS[@]}"; do
+                IGNORE_FILTER="$IGNORE_FILTER and .metadata.name != \"$ignore_app\""
+              done
+              echo "DEBUG: Ignore filter: $IGNORE_FILTER"
+              echo "DEBUG: Ignored apps: ${IGNORE_APPS[*]}"
+            fi
             
             # Check sync status (excluding ignored apps)
-            ALL_SYNCED=$(echo "$APPS" | jq "[.items[] | select(true $IGNORE_FILTER) | select(.status.sync.status != \"Synced\")] | length")
-            CHECKED_TOTAL=$(echo "$APPS" | jq "[.items[] | select(true $IGNORE_FILTER)] | length")
+            if [ -n "$IGNORE_FILTER" ]; then
+              ALL_SYNCED=$(echo "$APPS" | jq "[.items[] | select(true $IGNORE_FILTER) | select(.status.sync.status != \"Synced\")] | length")
+              CHECKED_TOTAL=$(echo "$APPS" | jq "[.items[] | select(true $IGNORE_FILTER)] | length")
+            else
+              ALL_SYNCED=$(echo "$APPS" | jq '[.items[] | select(.status.sync.status != "Synced")] | length')
+              CHECKED_TOTAL=$TOTAL
+            fi
             
             # Check health status (ALL apps including ignored - they must still be healthy!)
             ALL_HEALTHY=$(echo "$APPS" | jq '[.items[] | select(.status.health.status != "Healthy" and .status.health.status != "Progressing")] | length')
