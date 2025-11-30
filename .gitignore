@@ -5,7 +5,6 @@ docs/dev/platform-ref-multi-k8s
 .age-key
 .sops.yaml
 .claude
-.kiro
 docs
 scripts/bootstrap/.bootstrap-credentials-*.txt
 
