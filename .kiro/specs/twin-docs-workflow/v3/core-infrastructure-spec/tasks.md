@@ -65,11 +65,17 @@ This task list covers the implementation of core infrastructure components that 
     - Verify: Agent can list tools from MCP server
     - **STOP HERE and review test results before proceeding**
 
+
+
+
+
 - [ ] 3. Implement Contract Boundary Extractor
   - [ ] 3.1 Create `contract_extractor.py` file
     - Define `FileType` enum
     - Define `Parameter` dataclass
     - Define `ContractBoundary` dataclass
+
+
     - Implement `extract_contract_boundary()` main function
     - _Requirements: 3_
   
@@ -77,6 +83,8 @@ This task list covers the implementation of core infrastructure components that 
     - Create `YAMLContractExtractor` class
     - Implement `extract()` method for Crossplane YAML
     - Extract `spec.forProvider.*` parameters
+
+
     - Extract `spec.compositeTypeRef` schemas
     - Extract `metadata.*` fields
     - Ignore `status.*` and `patches.*`
@@ -84,33 +92,47 @@ This task list covers the implementation of core infrastructure components that 
   
   - [ ] 3.3 Implement Python Contract Extractor
     - Create `PythonContractExtractor` class
+
+
     - Implement `extract()` method using AST parsing
     - Extract function signatures (def, async def)
     - Extract class definitions (dataclass, Pydantic models)
     - Extract type hints
     - Ignore function bodies and private methods
     - _Requirements: 3_
+
+
   
   - [ ] 3.4 Implement Rego Contract Extractor
     - Create `RegoContractExtractor` class
     - Implement `extract()` method using regex
     - Extract rule names
+
+
     - Extract input/output schemas
     - Ignore rule logic
     - _Requirements: 3_
   
   - [ ] 3.5 Implement Markdown Contract Extractor
     - Create `MarkdownContractExtractor` class
+
+
+
     - Implement `extract()` method using regex
     - Extract ## Symptoms, ## Diagnosis, ## Resolution sections
     - Ignore anecdotes and background information
     - _Requirements: 3_
   
+
+
+
+
   - [ ] 3.6 Write unit tests for Contract Extractor
     - Test YAML parameter extraction with sample Crossplane file
     - Test Python signature extraction with sample Python file
     - Test Rego rule extraction with sample Rego file
     - Test Markdown section extraction with sample runbook
+
     - Test error handling for invalid files
     - Test error handling for unsupported file types
     - _Requirements: 3, 7_
@@ -119,19 +141,23 @@ This task list covers the implementation of core infrastructure components that 
     - Run: `uv run pytest platform/03-intelligence/agents/shared/tests/test_contract_extractor.py -v`
     - Verify: All tests pass
     - Verify: YAML extractor correctly identifies parameters
+
     - Verify: Python extractor correctly identifies function signatures
     - Test manually with real composition file: `platform/03-intelligence/test-webservice.yaml`
     - **STOP HERE and review test results before proceeding**
 
 - [ ] 4. Implement MDX Validator
-  - [ ] 4.1 Create `mdx_validator.py` file
+  - [x] 4.1 Create `mdx_validator.py` file
+
     - Define `ComponentType` enum
     - Define `ValidationError` dataclass
     - Define `ValidationResult` dataclass
     - Implement `validate_mdx()` main function
     - _Requirements: 4_
   
-  - [ ] 4.2 Implement component validation
+  - [x] 4.2 Implement component validation
+
+
     - Implement `validate_component()` function
     - Add validation for ParamField (requires `path` and `type`)
     - Add validation for Step (requires `title`)
@@ -140,6 +166,9 @@ This task list covers the implementation of core infrastructure components that 
     - Add whitelist check for approved components
     - _Requirements: 4_
   
+
+
+
   - [ ] 4.3 Implement frontmatter validation
     - Implement `validate_frontmatter()` function
     - Check required fields: title, category, description
