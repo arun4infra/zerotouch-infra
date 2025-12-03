@@ -9,6 +9,14 @@ spec:
     apiVersion: database.bizmatters.io/v1alpha1
     kind: XDragonflyInstance
   
+  publishConnectionDetailsTo:
+    - name: endpoint
+      fromConnectionSecretKey: endpoint
+    - name: port
+      fromConnectionSecretKey: port
+    - name: password
+      fromConnectionSecretKey: password
+  
   resources:
     # Secret for cache credentials
     - name: dragonfly-secret
@@ -24,7 +32,9 @@ spec:
                 namespace: databases
               type: Opaque
               stringData:
-                DRAGONFLY_PASSWORD: changeme-generated-password
+                endpoint: ""
+                port: "6379"
+                password: changeme-generated-password
           providerConfigRef:
             name: kubernetes-provider
       patches:
@@ -35,6 +45,23 @@ spec:
             - type: string
               string:
                 fmt: "%s-secret"
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.stringData.endpoint
+          transforms:
+            - type: string
+              string:
+                fmt: "%s.databases.svc.cluster.local"
+        - type: ToCompositeFieldPath
+          fromFieldPath: spec.forProvider.manifest.stringData.endpoint
+          toFieldPath: status.endpoint
+      connectionDetails:
+        - name: endpoint
+          fromFieldPath: spec.forProvider.manifest.stringData.endpoint
+        - name: port
+          fromFieldPath: spec.forProvider.manifest.stringData.port
+        - name: password
+          fromFieldPath: spec.forProvider.manifest.stringData.password
     
     # Service
     - name: dragonfly-service

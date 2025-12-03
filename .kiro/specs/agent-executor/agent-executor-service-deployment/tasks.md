@@ -176,56 +176,65 @@ This implementation plan deploys the agent_executor service using the AgentExecu
 
 ### Tasks
 
-- [ ] 3.1 Configure AWS SSM Parameter Store
+- [x] 3.1 Configure AWS SSM Parameter Store
   - Copy template: `cp .env.ssm.example .env.ssm` in zerotouch-platform root
-  - Edit `.env.ssm` and set agent-executor parameters with actual secret values:
-    - PostgreSQL: host=agent-executor-db.databases.svc, port=5432, db=langgraph_prod, user=agent_executor, password=<secure>
-    - Dragonfly: host=agent-executor-cache.databases.svc, port=6379, password=<secure>
+  - Edit `.env.ssm` and set parameters with actual secret values:
+    - Platform-wide: GitHub username and PAT token for ghcr.io (read:packages scope)
     - LLM keys: openai_api_key=sk-..., anthropic_api_key=sk-ant-...
   - Run: `./scripts/bootstrap/06-inject-ssm-parameters.sh` to create parameters in AWS SSM
-  - Verify: `aws ssm get-parameters-by-path --path /zerotouch/prod/agent-executor --recursive --region ap-south-1`
+  - Verify: `aws ssm get-parameters-by-path --path /zerotouch/prod --recursive --region ap-south-1`
+  - Note: PostgreSQL and Dragonfly credentials are managed by Crossplane (not SSM)
   - Note: Script is generic and creates any key-value pair from .env.ssm as SecureString parameters
   - _Requirements: 18.1, 18.2, 18.3, 18.4_
 
-- [ ] 3.2 Verify ESO has IAM permissions
+- [x] 3.2 Verify ESO has IAM permissions
   - Check ESO ServiceAccount has IAM role attached
   - Verify IAM role has ssm:GetParameter permission for /zerotouch/prod/agent-executor/*
   - Test ESO can read parameters: Check ESO logs for errors
   - _Requirements: 18.5_
 
-- [ ] 3.3 Create namespace manifest
+- [x] 3.3 Create namespace manifest
+  - Check ESO ServiceAccount has IAM role attached
+  - Verify IAM role has ssm:GetParameter permission for /zerotouch/prod/agent-executor/*
+  - Test ESO can read parameters: Check ESO logs for errors
+  - _Requirements: 18.5_
+
+- [x] 3.3 Create namespace manifest
   - Create file: `platform/claims/intelligence-deepagents/namespace.yaml`
   - Define namespace: intelligence-deepagents
   - Add labels: layer=intelligence, category=deepagents, name=intelligence-deepagents
   - _Requirements: 10.1, 10.2, 10.3, 10.4_
 
-- [ ] 3.4 Create ImagePullSecret manifest
-  - Create file: `platform/claims/intelligence-deepagents/image-pull-secret.yaml`
-  - Generate secret data: `kubectl create secret docker-registry ghcr-pull-secret --docker-server=ghcr.io --docker-username=<username> --docker-password=<token> --dry-run=client -o yaml`
-  - Copy .dockerconfigjson value to manifest
+- [x] 3.4 Create ImagePullSecret ExternalSecret manifest
+  - Create file: `platform/claims/intelligence-deepagents/external-secrets/image-pull-secret-es.yaml`
+  - Define ExternalSecret: ghcr-pull-secret
   - Set namespace: intelligence-deepagents
-  - Set name: ghcr-pull-secret
+  - Reference ClusterSecretStore: aws-parameter-store
+  - Set target type: kubernetes.io/dockerconfigjson
+  - Map AWS SSM keys: /zerotouch/prod/platform/ghcr/username and /zerotouch/prod/platform/ghcr/password
+  - Use template to format .dockerconfigjson with auth field (base64 encoded username:password)
+  - Note: GitHub credentials must be added to SSM via task 3.1 first
   - _Requirements: 14.1, 14.2, 14.4, 14.5_
 
-- [ ] 3.5 Create PostgreSQL ExternalSecret
-  - Create file: `platform/claims/intelligence-deepagents/external-secrets/postgres-es.yaml`
-  - Define ExternalSecret: agent-executor-postgres
+- [x] 3.5 Create PostgreSQL Crossplane Claim
+  - Create file: `platform/claims/intelligence-deepagents/postgres-claim.yaml`
+  - Define PostgresInstance claim: agent-executor-db
   - Set namespace: intelligence-deepagents
-  - Reference ClusterSecretStore: aws-parameter-store
-  - Map AWS SSM keys to secret keys: POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
-  - Set refreshInterval: 1h
+  - Set size: medium, version: 16, storageGB: 20
+  - Configure writeConnectionSecretToRef to create secret: agent-executor-postgres
+  - Update XRD and Composition to support connectionSecretKeys
   - _Requirements: 11.1, 11.4, 11.5_
 
-- [ ] 3.6 Create Dragonfly ExternalSecret
-  - Create file: `platform/claims/intelligence-deepagents/external-secrets/dragonfly-es.yaml`
-  - Define ExternalSecret: agent-executor-dragonfly
+- [x] 3.6 Create Dragonfly Crossplane Claim
+  - Create file: `platform/claims/intelligence-deepagents/dragonfly-claim.yaml`
+  - Define DragonflyInstance claim: agent-executor-cache
   - Set namespace: intelligence-deepagents
-  - Reference ClusterSecretStore: aws-parameter-store
-  - Map AWS SSM keys to secret keys: DRAGONFLY_HOST, DRAGONFLY_PORT, DRAGONFLY_PASSWORD
-  - Set refreshInterval: 1h
+  - Set size: medium, storageGB: 10
+  - Configure writeConnectionSecretToRef to create secret: agent-executor-dragonfly
+  - Update XRD and Composition to support connectionSecretKeys
   - _Requirements: 11.2, 11.4, 11.5_
 
-- [ ] 3.7 Create LLM keys ExternalSecret
+- [x] 3.7 Create LLM keys ExternalSecret
   - Create file: `platform/claims/intelligence-deepagents/external-secrets/llm-keys-es.yaml`
   - Define ExternalSecret: agent-executor-llm-keys
   - Set namespace: intelligence-deepagents
@@ -234,7 +243,7 @@ This implementation plan deploys the agent_executor service using the AgentExecu
   - Set refreshInterval: 1h
   - _Requirements: 11.3, 11.4, 11.5_
 
-- [ ] 3.8 Create NATS stream Job manifest
+- [x] 3.8 Create NATS stream Job manifest
   - Create file: `platform/claims/intelligence-deepagents/nats-stream.yaml`
   - Define Job: create-agent-execution-stream
   - Set namespace: intelligence-deepagents
@@ -245,7 +254,7 @@ This implementation plan deploys the agent_executor service using the AgentExecu
   - **CRITICAL**: Add annotation `argocd.argoproj.io/sync-wave: "1"` to ensure stream is created BEFORE deployment (sync-wave "2")
   - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5_
 
-- [ ] 3.9 Create AgentExecutor claim manifest
+- [x] 3.9 Create AgentExecutor claim manifest
   - Create file: `platform/claims/intelligence-deepagents/agent-executor-deployment.yaml` (using Deployment instead of claim)
   - Define Deployment: agent-executor with init container for migrations
   - Set namespace: intelligence-deepagents
@@ -285,14 +294,14 @@ This implementation plan deploys the agent_executor service using the AgentExecu
 
 ### Tasks
 
-- [ ] 4.1 Create tenant registry repository
+- [x] 4.1 Create tenant registry repository
   - Create new GitHub repository: `zerotouch-tenants` (private)
   - Initialize with README explaining tenant registry pattern
   - Create directory structure: `tenants/example/`, `tenants/bizmatters/`
   - Create example template: `tenants/example/config.yaml.example`
   - _Requirements: GitOps pattern, multi-tenant support_
 
-- [ ] 4.2 Create ApplicationSet in zerotouch-platform
+- [x] 4.2 Create ApplicationSet in zerotouch-platform
   - Create file: `zerotouch-platform/bootstrap/components/99-tenants.yaml`
   - Define ApplicationSet with Git generator
   - Configure to discover tenant configs from zerotouch-tenants repo
@@ -300,12 +309,12 @@ This implementation plan deploys the agent_executor service using the AgentExecu
   - Enable automated sync with prune and selfHeal
   - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.5_
 
-- [ ] 4.3 Create tenant config for bizmatters
+- [x] 4.3 Create tenant config for bizmatters
   - Create file: `zerotouch-tenants/tenants/bizmatters/config.yaml`
   - Set tenant name: bizmatters-workloads
   - Set repoURL: https://github.com/arun4infra/bizmatters.git
   - Set targetRevision: main
-  - Set path: services/agent_executor/platform
+  - Set path: services/agent_executor/platform/claims/intelligence-deepagents
   - Commit and push to zerotouch-tenants repo
   - _Requirements: 15.1, 15.2_
 

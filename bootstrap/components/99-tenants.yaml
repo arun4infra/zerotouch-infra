@@ -1,0 +1,49 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: tenant-applications
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "99"  # Deploy after all platform components
+spec:
+  generators:
+    - git:
+        repoURL: https://github.com/arun4infra/zerotouch-tenants.git
+        revision: main
+        directories:
+          - path: tenants/*
+        values:
+          # Read config.yaml from each tenant directory
+          files:
+            - config.yaml
+  template:
+    metadata:
+      name: '{{values.tenant}}'
+      namespace: argocd
+      labels:
+        tenant: '{{values.tenant}}'
+        managed-by: applicationset
+    spec:
+      project: default
+      source:
+        repoURL: '{{values.repoURL}}'
+        targetRevision: '{{values.targetRevision}}'
+        path: '{{values.path}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{values.namespace | default "default"}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+          allowEmpty: false
+        syncOptions:
+          - CreateNamespace=true
+          - PrunePropagationPolicy=foreground
+          - PruneLast=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m

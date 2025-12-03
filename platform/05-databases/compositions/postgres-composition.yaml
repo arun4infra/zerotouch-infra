@@ -9,6 +9,18 @@ spec:
     apiVersion: database.bizmatters.io/v1alpha1
     kind: XPostgresInstance
   
+  publishConnectionDetailsTo:
+    - name: endpoint
+      fromConnectionSecretKey: endpoint
+    - name: port
+      fromConnectionSecretKey: port
+    - name: username
+      fromConnectionSecretKey: username
+    - name: password
+      fromConnectionSecretKey: password
+    - name: database
+      fromConnectionSecretKey: database
+  
   resources:
     # Secret for database credentials
     - name: postgres-secret
@@ -24,9 +36,11 @@ spec:
                 namespace: databases
               type: Opaque
               stringData:
-                POSTGRES_DB: postgres
-                POSTGRES_USER: postgres
-                POSTGRES_PASSWORD: changeme-generated-password
+                endpoint: ""
+                port: "5432"
+                username: postgres
+                password: changeme-generated-password
+                database: postgres
           providerConfigRef:
             name: kubernetes-provider
       patches:
@@ -37,6 +51,27 @@ spec:
             - type: string
               string:
                 fmt: "%s-secret"
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.stringData.endpoint
+          transforms:
+            - type: string
+              string:
+                fmt: "%s.databases.svc.cluster.local"
+        - type: ToCompositeFieldPath
+          fromFieldPath: spec.forProvider.manifest.stringData.endpoint
+          toFieldPath: status.endpoint
+      connectionDetails:
+        - name: endpoint
+          fromFieldPath: spec.forProvider.manifest.stringData.endpoint
+        - name: port
+          fromFieldPath: spec.forProvider.manifest.stringData.port
+        - name: username
+          fromFieldPath: spec.forProvider.manifest.stringData.username
+        - name: password
+          fromFieldPath: spec.forProvider.manifest.stringData.password
+        - name: database
+          fromFieldPath: spec.forProvider.manifest.stringData.database
     
     # Service
     - name: postgres-service
