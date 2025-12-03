@@ -5,7 +5,8 @@ docs/dev/platform-ref-multi-k8s
 .age-key
 .sops.yaml
 .claude
-.kiro
+.kiro/specs/agent-executor-deployment
+.kiro/specs/twin-docs-workflow/
 docs
 scripts/bootstrap/.bootstrap-credentials-*.txt
 
