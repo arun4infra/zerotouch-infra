@@ -1,5 +1,6 @@
 bootstrap/talos/*
 .env
+.env.ssm
 docs/dev/repos
 docs/dev/platform-ref-multi-k8s
 .age-key

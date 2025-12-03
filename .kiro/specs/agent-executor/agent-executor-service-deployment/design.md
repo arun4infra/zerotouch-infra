@@ -179,6 +179,153 @@ COPY migrations/ /app/migrations/
 
 **Implementation**: Already added to manifests in tasks 3.8 and 3.9.
 
+### 2.4 Secrets Management via AWS SSM Parameter Store
+
+#### 2.4.1 Generic SSM Injection Mechanism
+
+The platform provides a generic script (`scripts/bootstrap/06-inject-ssm-parameters.sh`) that reads secrets from a `.env.ssm` file and creates them in AWS Systems Manager Parameter Store.
+
+**File Structure:**
+```
+zerotouch-platform/
+├── .env.ssm.example          # Template (committed to git)
+├── .env.ssm                  # Actual secrets (gitignored)
+└── scripts/bootstrap/
+    └── 06-inject-ssm-parameters.sh  # Generic injection script
+```
+
+**Workflow:**
+```
+1. Copy template: cp .env.ssm.example .env.ssm
+    ↓
+2. Edit .env.ssm with actual secret values
+    ↓
+3. Run: ./scripts/bootstrap/06-inject-ssm-parameters.sh
+    ↓
+4. Script creates parameters in AWS SSM (SecureString type)
+    ↓
+5. ESO automatically syncs parameters to Kubernetes Secrets
+    ↓
+6. Application pods mount secrets as environment variables
+```
+
+**Benefits:**
+- **Generic**: Works for any service, not specific to agent-executor
+- **Single Source of Truth**: All secrets in one file
+- **Secure**: `.env.ssm` is gitignored, parameters encrypted at rest
+- **Automated**: One command to inject all secrets
+- **Idempotent**: Can be run multiple times (updates existing parameters)
+
+**Example `.env.ssm` format:**
+```bash
+/zerotouch/prod/service-name/key=value
+/zerotouch/prod/agent-executor/postgres/password=secure_password
+/zerotouch/prod/agent-executor/openai_api_key=sk-...
+```
+
+#### 2.4.2 ESO Integration
+
+External Secrets Operator (ESO) is configured with AWS credentials via `05-inject-secrets.sh` (one-time bootstrap). Once configured, ESO automatically:
+1. Reads parameters from AWS SSM Parameter Store
+2. Creates Kubernetes Secrets in target namespaces
+3. Refreshes secrets periodically (default: 1h)
+
+**ExternalSecret Example:**
+```yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: agent-executor-postgres
+  namespace: intelligence-deepagents
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-parameter-store
+    kind: ClusterSecretStore
+  target:
+    name: agent-executor-postgres
+    creationPolicy: Owner
+  data:
+    - secretKey: POSTGRES_PASSWORD
+      remoteRef:
+        key: /zerotouch/prod/agent-executor/postgres/password
+```
+
+### 2.5 Database Per Service Pattern
+
+#### 2.5.1 Pattern Overview
+
+The platform follows the "Database per Service" microservices pattern:
+- Each service owns its own database instance or schema
+- Databases are provisioned using Crossplane compositions
+- Platform provides generic XRDs (Composite Resource Definitions)
+- Services create claims to provision dedicated databases
+
+**Benefits:**
+- **Isolation**: Service failures don't affect other services
+- **Independent Scaling**: Each database can be sized appropriately
+- **Schema Evolution**: Services can migrate schemas independently
+- **Technology Choice**: Different services can use different database engines
+
+#### 2.5.2 Crossplane-Based Provisioning
+
+The platform provides Crossplane compositions for common databases:
+- `XPostgresInstance`: PostgreSQL database instances
+- `XDragonflyInstance`: Dragonfly (Redis-compatible) cache instances
+
+**Provisioning Flow:**
+```
+1. Service creates claim YAML (e.g., agent-executor-db.yaml)
+    ↓
+2. Commit claim to bizmatters repo
+    ↓
+3. ArgoCD syncs claim to cluster
+    ↓
+4. Crossplane provisions database resources:
+   - StatefulSet (database pod)
+   - Service (ClusterIP)
+   - Secret (credentials)
+   - PersistentVolumeClaim (storage)
+    ↓
+5. Database becomes available at: {instance-name}.databases.svc
+```
+
+#### 2.5.3 Agent Executor Database Claims
+
+Agent executor requires two database instances:
+
+**PostgreSQL (for LangGraph checkpoints):**
+- Instance name: `agent-executor-db`
+- Service DNS: `agent-executor-db.databases.svc:5432`
+- Database: `langgraph_prod`
+- User: `agent_executor`
+
+**Dragonfly (for streaming events):**
+- Instance name: `agent-executor-cache`
+- Service DNS: `agent-executor-cache.databases.svc:6379`
+- Purpose: Real-time event streaming via pub/sub
+
+**Claim Location:**
+```
+bizmatters/services/agent_executor/platform/
+├── postgres-claim.yaml      # XPostgresInstance claim
+└── dragonfly-claim.yaml     # XDragonflyInstance claim
+```
+
+**Connection Configuration:**
+Credentials are stored in AWS SSM and synced via ESO:
+```
+/zerotouch/prod/agent-executor/postgres/host=agent-executor-db.databases.svc
+/zerotouch/prod/agent-executor/postgres/port=5432
+/zerotouch/prod/agent-executor/postgres/db=langgraph_prod
+/zerotouch/prod/agent-executor/postgres/user=agent_executor
+/zerotouch/prod/agent-executor/postgres/password=<secure-password>
+
+/zerotouch/prod/agent-executor/dragonfly/host=agent-executor-cache.databases.svc
+/zerotouch/prod/agent-executor/dragonfly/port=6379
+/zerotouch/prod/agent-executor/dragonfly/password=<secure-password>
+```
+
 ## 3. Component Design
 
 ### 3.1 Application Code Changes

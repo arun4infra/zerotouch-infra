@@ -382,6 +382,45 @@ EOF
 
 cd "$SCRIPT_DIR"
 
+# Step 4.6: Inject SSM Parameters
+echo -e "${YELLOW}[4.6/5] Injecting SSM Parameters...${NC}"
+echo "────────────────────────────────────────────────────────────────"
+
+# Check if .env.ssm file exists
+if [ -f "../.env.ssm" ]; then
+    echo -e "${BLUE}Found .env.ssm file, injecting parameters to AWS SSM...${NC}"
+    ./06-inject-ssm-parameters.sh
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ SSM parameters injected successfully${NC}"
+    else
+        echo -e "${YELLOW}⚠️  SSM parameter injection failed or skipped${NC}"
+        echo -e "${BLUE}   You can run manually: ./scripts/bootstrap/06-inject-ssm-parameters.sh${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠️  .env.ssm file not found${NC}"
+    echo -e "${BLUE}ℹ  To inject SSM parameters:${NC}"
+    echo -e "   1. ${GREEN}cp .env.ssm.example .env.ssm${NC}"
+    echo -e "   2. Edit .env.ssm with your secrets"
+    echo -e "   3. ${GREEN}./scripts/bootstrap/06-inject-ssm-parameters.sh${NC}"
+    echo ""
+fi
+
+cat >> "$CREDENTIALS_FILE" << EOF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AWS SSM PARAMETER STORE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Inject SSM parameters:
+  cp .env.ssm.example .env.ssm
+  # Edit .env.ssm with your secrets
+  ./scripts/bootstrap/06-inject-ssm-parameters.sh
+
+Verify parameters:
+  aws ssm get-parameters --names /zerotouch/prod/kagent/openai_api_key --region ap-south-1
+
+EOF
+
 # Step 4.5: Database Layer (managed by ArgoCD)
 if [ -n "$WORKER_NODES" ]; then
     echo -e "${YELLOW}[4.5/5] Database Layer (will be deployed by ArgoCD)...${NC}"
