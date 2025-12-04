@@ -1,0 +1,87 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nats
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nats-config
+  namespace: nats
+data:
+  nats.conf: |
+    port: 4222
+    http_port: 8222
+    
+    jetstream {
+      store_dir: /data
+      max_mem: 1Gb
+      max_file: 10Gb
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nats
+  namespace: nats
+spec:
+  type: ClusterIP
+  ports:
+  - name: client
+    port: 4222
+  - name: monitor
+    port: 8222
+  selector:
+    app: nats
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nats
+  namespace: nats
+spec:
+  replicas: 1
+  serviceName: nats
+  selector:
+    matchLabels:
+      app: nats
+  template:
+    metadata:
+      labels:
+        app: nats
+    spec:
+      containers:
+      - name: nats
+        image: nats:2.10-alpine
+        args: ["-c", "/etc/nats/nats.conf", "-js"]
+        ports:
+        - containerPort: 4222
+          name: client
+        - containerPort: 8222
+          name: monitor
+        volumeMounts:
+        - name: config
+          mountPath: /etc/nats
+        - name: data
+          mountPath: /data
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+      volumes:
+      - name: config
+        configMap:
+          name: nats-config
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: local-path
+      resources:
+        requests:
+          storage: 10Gi
