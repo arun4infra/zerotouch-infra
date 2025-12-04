@@ -469,15 +469,31 @@ fi
 if [ -n "$GITHUB_USERNAME" ] && [ -n "$GITHUB_TOKEN" ]; then
     echo -e "${BLUE}Found GitHub credentials${NC}"
     
-    # Add zerotouch-tenants repository (required for ApplicationSet)
-    TENANT_REGISTRY_REPO="${TENANT_REGISTRY_REPO:-https://github.com/arun4infra/zerotouch-tenants.git}"
-    echo -e "${BLUE}Adding tenant registry repository: $TENANT_REGISTRY_REPO${NC}"
-    ./07-add-private-repo.sh "$TENANT_REGISTRY_REPO" "$GITHUB_USERNAME" "$GITHUB_TOKEN"
-    
-    # Add bizmatters repository (optional)
-    if [ -n "$BIZMATTERS_REPO" ]; then
-        echo -e "${BLUE}Adding bizmatters repository: $BIZMATTERS_REPO${NC}"
-        ./07-add-private-repo.sh "$BIZMATTERS_REPO" "$GITHUB_USERNAME" "$GITHUB_TOKEN"
+    # Read private repositories from .env.ssm
+    ENV_SSM_FILE="$SCRIPT_DIR/../../.env.ssm"
+    if [ -f "$ENV_SSM_FILE" ]; then
+        echo -e "${BLUE}Reading private repositories from .env.ssm...${NC}"
+        
+        # Extract all ARGOCD_PRIVATE_REPO_* variables
+        PRIVATE_REPOS=$(grep "^ARGOCD_PRIVATE_REPO_" "$ENV_SSM_FILE" | cut -d'=' -f2)
+        
+        if [ -n "$PRIVATE_REPOS" ]; then
+            REPO_COUNT=$(echo "$PRIVATE_REPOS" | wc -l | tr -d ' ')
+            echo -e "${BLUE}Found $REPO_COUNT private repository/repositories${NC}"
+            
+            # Add each repository
+            while IFS= read -r repo_url; do
+                if [ -n "$repo_url" ]; then
+                    echo -e "${BLUE}Adding repository: $repo_url${NC}"
+                    ./07-add-private-repo.sh "$repo_url" "$GITHUB_USERNAME" "$GITHUB_TOKEN"
+                fi
+            done <<< "$PRIVATE_REPOS"
+        else
+            echo -e "${YELLOW}⚠️  No private repositories defined in .env.ssm${NC}"
+            echo -e "${BLUE}ℹ  Add repositories with: ARGOCD_PRIVATE_REPO_1=https://github.com/org/repo.git${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠️  .env.ssm file not found${NC}"
     fi
     
     echo -e "${GREEN}✓ Repository credentials configured${NC}"
@@ -518,14 +534,13 @@ cat >> "$CREDENTIALS_FILE" << EOF
 ARGOCD REPOSITORY CREDENTIALS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Add private repository credentials:
-  ./scripts/bootstrap/07-add-private-repo.sh <repo-url> <username> <token>
+Private repositories are configured from: .env.ssm
 
-Example:
-  ./scripts/bootstrap/07-add-private-repo.sh \\
-    https://github.com/arun4infra/zerotouch-tenants.git \\
-    arun4infra \\
-    ghp_xxxxx
+To add more private repositories:
+  1. Edit .env.ssm
+  2. Add: ARGOCD_PRIVATE_REPO_N=https://github.com/org/repo.git
+  3. Re-run bootstrap or add manually:
+     ./scripts/bootstrap/07-add-private-repo.sh <repo-url> <username> <token>
 
 Verify:
   kubectl get secret -n argocd | grep repo-
