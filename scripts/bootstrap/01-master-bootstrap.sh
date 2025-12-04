@@ -70,6 +70,30 @@ echo -e "${BLUE}╔════════════════════�
 echo -e "${BLUE}║   BizMatters Infrastructure - Master Bootstrap Script      ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
+
+# Check if cluster is already bootstrapped
+if kubectl cluster-info &>/dev/null; then
+    echo -e "${YELLOW}⚠️  WARNING: Kubernetes cluster is already accessible${NC}"
+    echo -e "${YELLOW}   This script is designed for initial bootstrap only.${NC}"
+    echo ""
+    echo -e "${BLUE}Current cluster:${NC}"
+    kubectl get nodes 2>/dev/null || true
+    echo ""
+    echo -e "${YELLOW}If you need to:${NC}"
+    echo -e "  - Add repository credentials: ${GREEN}./scripts/bootstrap/07-add-private-repo.sh${NC}"
+    echo -e "  - Inject secrets: ${GREEN}./scripts/bootstrap/05-inject-secrets.sh${NC}"
+    echo -e "  - Add worker nodes: ${GREEN}./scripts/bootstrap/04-add-worker-node.sh${NC}"
+    echo ""
+    read -p "Do you want to continue anyway? This may cause issues! (y/N): " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "${GREEN}Aborted. Use individual scripts for post-bootstrap tasks.${NC}"
+        exit 0
+    fi
+    echo -e "${YELLOW}Continuing with bootstrap (you've been warned!)...${NC}"
+    echo ""
+fi
+
 echo -e "${GREEN}Server IP:${NC} $SERVER_IP"
 echo -e "${GREEN}Credentials will be saved to:${NC} $CREDENTIALS_FILE"
 echo ""
@@ -425,25 +449,65 @@ EOF
 echo -e "${YELLOW}[4.7/5] Configuring ArgoCD Repository Credentials...${NC}"
 echo "────────────────────────────────────────────────────────────────"
 
-# Check if GITHUB_USERNAME and GITHUB_TOKEN are provided via environment variables
-if [ -n "$GITHUB_USERNAME" ] && [ -n "$GITHUB_TOKEN" ]; then
-    echo -e "${BLUE}Found GitHub credentials in environment variables${NC}"
-    
-    # Add zerotouch-tenants repository
-    if [ -n "$TENANT_REGISTRY_REPO" ]; then
-        echo -e "${BLUE}Adding tenant registry repository: $TENANT_REGISTRY_REPO${NC}"
-        ./07-add-private-repo.sh "$TENANT_REGISTRY_REPO" "$GITHUB_USERNAME" "$GITHUB_TOKEN"
+# Check if tenant ApplicationSet exists (requires private repo access)
+TENANT_APPSET_EXISTS=false
+if [ -f "$SCRIPT_DIR/../../bootstrap/components/99-tenants.yaml" ]; then
+    TENANT_APPSET_EXISTS=true
+    echo -e "${BLUE}Found tenant ApplicationSet (99-tenants.yaml)${NC}"
+fi
+
+# Try to get GitHub credentials from environment variables first, then from .env.ssm
+if [ -z "$GITHUB_USERNAME" ] || [ -z "$GITHUB_TOKEN" ]; then
+    if [ -f "$SCRIPT_DIR/../../.env.ssm" ]; then
+        echo -e "${BLUE}Reading GitHub credentials from .env.ssm...${NC}"
+        GITHUB_USERNAME=$(grep "^/zerotouch/prod/platform/github/username=" "$SCRIPT_DIR/../../.env.ssm" | cut -d'=' -f2)
+        GITHUB_TOKEN=$(grep "^/zerotouch/prod/platform/github/token=" "$SCRIPT_DIR/../../.env.ssm" | cut -d'=' -f2)
     fi
+fi
+
+# Check if we have GitHub credentials from either source
+if [ -n "$GITHUB_USERNAME" ] && [ -n "$GITHUB_TOKEN" ]; then
+    echo -e "${BLUE}Found GitHub credentials${NC}"
     
-    # Add bizmatters repository
+    # Add zerotouch-tenants repository (required for ApplicationSet)
+    TENANT_REGISTRY_REPO="${TENANT_REGISTRY_REPO:-https://github.com/arun4infra/zerotouch-tenants.git}"
+    echo -e "${BLUE}Adding tenant registry repository: $TENANT_REGISTRY_REPO${NC}"
+    ./07-add-private-repo.sh "$TENANT_REGISTRY_REPO" "$GITHUB_USERNAME" "$GITHUB_TOKEN"
+    
+    # Add bizmatters repository (optional)
     if [ -n "$BIZMATTERS_REPO" ]; then
         echo -e "${BLUE}Adding bizmatters repository: $BIZMATTERS_REPO${NC}"
         ./07-add-private-repo.sh "$BIZMATTERS_REPO" "$GITHUB_USERNAME" "$GITHUB_TOKEN"
     fi
     
     echo -e "${GREEN}✓ Repository credentials configured${NC}"
+elif [ "$TENANT_APPSET_EXISTS" = true ]; then
+    # FAIL FAST: Tenant ApplicationSet exists but no credentials provided
+    echo -e "${RED}✗ ERROR: Tenant ApplicationSet requires GitHub credentials${NC}"
+    echo ""
+    echo -e "${RED}The bootstrap includes 99-tenants.yaml which requires access to:${NC}"
+    echo -e "${RED}  https://github.com/arun4infra/zerotouch-tenants.git${NC}"
+    echo ""
+    echo -e "${YELLOW}Option 1: Add credentials to .env.ssm (RECOMMENDED):${NC}"
+    echo -e "  ${GREEN}cp .env.ssm.example .env.ssm${NC}"
+    echo -e "  ${GREEN}# Edit .env.ssm and set:${NC}"
+    echo -e "  ${GREEN}#   /zerotouch/prod/platform/github/username=your-username${NC}"
+    echo -e "  ${GREEN}#   /zerotouch/prod/platform/github/token=ghp_xxxxx${NC}"
+    echo -e "  ${GREEN}./scripts/bootstrap/01-master-bootstrap.sh $SERVER_IP $ROOT_PASSWORD${NC}"
+    echo ""
+    echo -e "${YELLOW}Option 2: Use environment variables:${NC}"
+    echo -e "  ${GREEN}export GITHUB_USERNAME=your-username${NC}"
+    echo -e "  ${GREEN}export GITHUB_TOKEN=ghp_xxxxx${NC}"
+    echo -e "  ${GREEN}./scripts/bootstrap/01-master-bootstrap.sh $SERVER_IP $ROOT_PASSWORD${NC}"
+    echo ""
+    echo -e "${YELLOW}Option 3: Add credentials manually after bootstrap:${NC}"
+    echo -e "  ${GREEN}./scripts/bootstrap/07-add-private-repo.sh \\${NC}"
+    echo -e "  ${GREEN}    https://github.com/arun4infra/zerotouch-tenants.git \\${NC}"
+    echo -e "  ${GREEN}    <username> <token>${NC}"
+    echo ""
+    exit 1
 else
-    echo -e "${YELLOW}⚠️  GitHub credentials not provided via environment variables${NC}"
+    echo -e "${YELLOW}⚠️  GitHub credentials not provided${NC}"
     echo -e "${BLUE}ℹ  To add private repository credentials for ArgoCD:${NC}"
     echo -e "   ${GREEN}./scripts/bootstrap/07-add-private-repo.sh <repo-url> <username> <token>${NC}"
     echo ""
