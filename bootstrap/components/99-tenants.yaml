@@ -25,6 +25,8 @@ spec:
         repoURL: '{{repoURL}}'
         targetRevision: '{{targetRevision}}'
         path: '{{manifestPath}}'
+        directory:
+          recurse: true
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{namespace}}'
