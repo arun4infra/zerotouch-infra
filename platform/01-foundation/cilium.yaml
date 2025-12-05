@@ -5,6 +5,8 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
+    # Allow ArgoCD to adopt existing Cilium deployment from Talos inline manifest
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   project: default
   source:

@@ -78,10 +78,10 @@ else
     kubectl create namespace "$ARGOCD_NAMESPACE"
 fi
 
-log_info "Applying ArgoCD manifests (version: $ARGOCD_VERSION)..."
-kubectl apply -n "$ARGOCD_NAMESPACE" -f "https://raw.githubusercontent.com/argoproj/argo-cd/$ARGOCD_VERSION/manifests/install.yaml"
+log_info "Applying ArgoCD manifests with control-plane tolerations (version: $ARGOCD_VERSION)..."
+kubectl apply -k "$REPO_ROOT/bootstrap/argocd"
 
-log_info "✓ ArgoCD manifests applied"
+log_info "✓ ArgoCD manifests applied with control-plane tolerations"
 
 # Step 2: Wait for ArgoCD to be ready
 log_info ""

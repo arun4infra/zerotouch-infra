@@ -18,6 +18,33 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Kubectl retry function with exponential backoff
+kubectl_retry() {
+    local max_attempts=20
+    local timeout=15
+    local attempt=1
+    local exitCode=0
+
+    while [ $attempt -le $max_attempts ]; do
+        if timeout $timeout kubectl "$@"; then
+            return 0
+        fi
+
+        exitCode=$?
+
+        if [ $attempt -lt $max_attempts ]; then
+            local delay=$((attempt * 2))
+            echo -e "${YELLOW}⚠️  kubectl command failed (attempt $attempt/$max_attempts). Retrying in ${delay}s...${NC}" >&2
+            sleep $delay
+        fi
+
+        attempt=$((attempt + 1))
+    done
+
+    echo -e "${RED}✗ kubectl command failed after $max_attempts attempts${NC}" >&2
+    return $exitCode
+}
+
 # Parse arguments
 if [ "$#" -lt 2 ]; then
     echo -e "${RED}Usage: $0 <server-ip> <root-password> [--worker-nodes <list>] [--worker-password <password>]${NC}"
@@ -110,6 +137,16 @@ Bootstrap Date: $(date)
 
 EOF
 
+# Step 0.5: Embed Cilium in Talos config for bootstrap
+echo -e "${YELLOW}[0.5/5] Preparing Cilium CNI for bootstrap...${NC}"
+echo "────────────────────────────────────────────────────────────────"
+cd "$SCRIPT_DIR"
+
+echo -e "${BLUE}Embedding Cilium manifest in control plane Talos config...${NC}"
+./embed-cilium.sh
+
+echo -e "\n${GREEN}✓ Cilium CNI prepared for bootstrap${NC}\n"
+
 # Step 1: Install Talos
 echo -e "${YELLOW}[1/5] Installing Talos OS...${NC}"
 echo "────────────────────────────────────────────────────────────────"
@@ -140,17 +177,21 @@ sleep 180
 
 cd "$SCRIPT_DIR/../../bootstrap/talos"
 
-echo -e "${BLUE}Applying Talos configuration...${NC}"
+echo -e "${BLUE}Applying Talos configuration (with CNI=none to prevent Flannel)...${NC}"
+# Apply config with CNI patch to prevent Talos from deploying Flannel
+# Cilium will be deployed via inlineManifests instead
 if ! talosctl apply-config --insecure \
   --nodes "$SERVER_IP" \
   --endpoints "$SERVER_IP" \
-  --file nodes/cp01-main/config.yaml; then
+  --file nodes/cp01-main/config.yaml \
+  --config-patch '[{"op": "add", "path": "/cluster/network/cni", "value": {"name": "none"}}]'; then
     echo -e "${RED}Failed to apply Talos config. Waiting 30s and retrying...${NC}"
     sleep 30
     talosctl apply-config --insecure \
       --nodes "$SERVER_IP" \
       --endpoints "$SERVER_IP" \
-      --file nodes/cp01-main/config.yaml
+      --file nodes/cp01-main/config.yaml \
+      --config-patch '[{"op": "add", "path": "/cluster/network/cni", "value": {"name": "none"}}]'
 fi
 
 echo -e "${BLUE}Waiting 30 seconds for config to apply...${NC}"
@@ -162,8 +203,8 @@ talosctl bootstrap \
   --endpoints "$SERVER_IP" \
   --talosconfig talosconfig
 
-echo -e "${BLUE}Waiting 60 seconds for cluster to stabilize...${NC}"
-sleep 60
+echo -e "${BLUE}Waiting 180 seconds for cluster to stabilize and API server to start...${NC}"
+sleep 180
 
 echo -e "${BLUE}Fetching kubeconfig...${NC}"
 talosctl kubeconfig \
@@ -172,8 +213,8 @@ talosctl kubeconfig \
   --talosconfig talosconfig \
   --force
 
-echo -e "${BLUE}Verifying cluster...${NC}"
-kubectl get nodes
+echo -e "${BLUE}Verifying cluster (with retries)...${NC}"
+kubectl_retry get nodes
 
 echo -e "\n${GREEN}✓ Talos cluster bootstrapped successfully${NC}\n"
 
@@ -216,8 +257,8 @@ echo -e "${BLUE}⏳ Waiting for platform-bootstrap to sync (timeout: 5 minutes).
 TIMEOUT=300
 ELAPSED=0
 while [ $ELAPSED -lt $TIMEOUT ]; do
-    SYNC_STATUS=$(kubectl get application platform-bootstrap -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
-    HEALTH_STATUS=$(kubectl get application platform-bootstrap -n argocd -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Unknown")
+    SYNC_STATUS=$(kubectl_retry get application platform-bootstrap -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
+    HEALTH_STATUS=$(kubectl_retry get application platform-bootstrap -n argocd -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Unknown")
     
     if [ "$SYNC_STATUS" = "Synced" ] && [ "$HEALTH_STATUS" = "Healthy" ]; then
         echo -e "${GREEN}✓ platform-bootstrap synced successfully${NC}"
@@ -245,7 +286,7 @@ EXPECTED_APPS=("crossplane-operator" "external-secrets" "keda" "kagent" "intelli
 MISSING_APPS=()
 
 for app in "${EXPECTED_APPS[@]}"; do
-    if ! kubectl get application "$app" -n argocd &>/dev/null; then
+    if ! kubectl_retry get application "$app" -n argocd &>/dev/null; then
         MISSING_APPS+=("$app")
     fi
 done
@@ -259,7 +300,7 @@ fi
 echo -e "${GREEN}✓ All child Applications created${NC}\n"
 
 # Extract ArgoCD password
-ARGOCD_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>/dev/null | base64 -d || echo "NOT_GENERATED")
+ARGOCD_PASSWORD=$(kubectl_retry -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>/dev/null | base64 -d || echo "NOT_GENERATED")
 
 cat >> "$CREDENTIALS_FILE" << EOF
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -305,26 +346,28 @@ if [ -n "$WORKER_NODES" ]; then
         
         # Apply worker configuration
         cd "$SCRIPT_DIR/../../bootstrap/talos"
-        echo -e "${BLUE}Applying worker configuration for $WORKER_NAME...${NC}"
-        
+        echo -e "${BLUE}Applying worker configuration for $WORKER_NAME (with CNI=none)...${NC}"
+
         if ! talosctl apply-config --insecure \
             --nodes "$WORKER_IP" \
             --endpoints "$WORKER_IP" \
-            --file "nodes/$WORKER_NAME/config.yaml"; then
+            --file "nodes/$WORKER_NAME/config.yaml" \
+            --config-patch '[{"op": "add", "path": "/machine/network/cni", "value": {"name": "none"}}]'; then
             echo -e "${RED}Failed to apply config. Waiting 30s and retrying...${NC}"
             sleep 30
             talosctl apply-config --insecure \
                 --nodes "$WORKER_IP" \
                 --endpoints "$WORKER_IP" \
-                --file "nodes/$WORKER_NAME/config.yaml"
+                --file "nodes/$WORKER_NAME/config.yaml" \
+                --config-patch '[{"op": "add", "path": "/machine/network/cni", "value": {"name": "none"}}]'
         fi
         
-        echo -e "${BLUE}Waiting 60 seconds for worker to join cluster...${NC}"
-        sleep 60
-        
+        echo -e "${BLUE}Waiting 120 seconds for worker to join cluster...${NC}"
+        sleep 120
+
         # Verify node joined
-        echo -e "${BLUE}Verifying worker node joined cluster...${NC}"
-        kubectl get nodes
+        echo -e "${BLUE}Verifying worker node joined cluster (with retries)...${NC}"
+        kubectl_retry get nodes
         
         cd "$SCRIPT_DIR"
         
@@ -358,8 +401,8 @@ if ./05-inject-secrets.sh; then
     echo -e "${GREEN}✓ AWS credentials injected successfully${NC}"
     
     # Only wait for ESO if credentials were successfully injected
-    if kubectl get secret aws-access-token -n external-secrets &>/dev/null; then
-    
+    if kubectl_retry get secret aws-access-token -n external-secrets &>/dev/null; then
+
     # Wait for ESO to sync
     echo -e "${BLUE}⏳ Waiting for ESO to sync secrets (timeout: 2 minutes)...${NC}"
         # Wait for ESO to sync
@@ -367,7 +410,7 @@ if ./05-inject-secrets.sh; then
         TIMEOUT=120
         ELAPSED=0
         while [ $ELAPSED -lt $TIMEOUT ]; do
-            STORE_STATUS=$(kubectl get clustersecretstore aws-parameter-store -o jsonpath='{.status.conditions[0].status}' 2>/dev/null || echo "Unknown")
+            STORE_STATUS=$(kubectl_retry get clustersecretstore aws-parameter-store -o jsonpath='{.status.conditions[0].status}' 2>/dev/null || echo "Unknown")
             
             if [ "$STORE_STATUS" = "True" ]; then
                 echo -e "${GREEN}✓ ESO credentials configured and working${NC}"
