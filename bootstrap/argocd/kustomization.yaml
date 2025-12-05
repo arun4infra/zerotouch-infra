@@ -4,32 +4,81 @@ kind: Kustomization
 resources:
   - https://raw.githubusercontent.com/argoproj/argo-cd/v3.2.0/manifests/install.yaml
 
+# Add control-plane tolerations to all workloads
 patches:
-  - path: toleration-patch.yaml
-    target:
-      kind: Deployment
-      name: argocd-server
-  - path: toleration-patch.yaml
-    target:
-      kind: Deployment
-      name: argocd-repo-server
-  - path: toleration-patch.yaml
-    target:
-      kind: Deployment
-      name: argocd-redis
-  - path: toleration-patch.yaml
-    target:
-      kind: Deployment
-      name: argocd-dex-server
-  - path: toleration-patch.yaml
-    target:
-      kind: Deployment
-      name: argocd-notifications-controller
-  - path: toleration-patch.yaml
-    target:
+  - target:
       kind: Deployment
       name: argocd-applicationset-controller
-  - path: toleration-patch.yaml
-    target:
+    patch: |-
+      - op: add
+        path: /spec/template/spec/tolerations
+        value:
+          - key: node-role.kubernetes.io/control-plane
+            operator: Exists
+            effect: NoSchedule
+
+  - target:
+      kind: Deployment
+      name: argocd-dex-server
+    patch: |-
+      - op: add
+        path: /spec/template/spec/tolerations
+        value:
+          - key: node-role.kubernetes.io/control-plane
+            operator: Exists
+            effect: NoSchedule
+
+  - target:
+      kind: Deployment
+      name: argocd-notifications-controller
+    patch: |-
+      - op: add
+        path: /spec/template/spec/tolerations
+        value:
+          - key: node-role.kubernetes.io/control-plane
+            operator: Exists
+            effect: NoSchedule
+
+  - target:
+      kind: Deployment
+      name: argocd-redis
+    patch: |-
+      - op: add
+        path: /spec/template/spec/tolerations
+        value:
+          - key: node-role.kubernetes.io/control-plane
+            operator: Exists
+            effect: NoSchedule
+
+  - target:
+      kind: Deployment
+      name: argocd-repo-server
+    patch: |-
+      - op: add
+        path: /spec/template/spec/tolerations
+        value:
+          - key: node-role.kubernetes.io/control-plane
+            operator: Exists
+            effect: NoSchedule
+
+  - target:
+      kind: Deployment
+      name: argocd-server
+    patch: |-
+      - op: add
+        path: /spec/template/spec/tolerations
+        value:
+          - key: node-role.kubernetes.io/control-plane
+            operator: Exists
+            effect: NoSchedule
+
+  - target:
       kind: StatefulSet
       name: argocd-application-controller
+    patch: |-
+      - op: add
+        path: /spec/template/spec/tolerations
+        value:
+          - key: node-role.kubernetes.io/control-plane
+            operator: Exists
+            effect: NoSchedule

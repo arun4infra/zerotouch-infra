@@ -87,11 +87,34 @@ log_info "✓ ArgoCD manifests applied with control-plane tolerations"
 log_info ""
 log_step "Step 2/5: Waiting for ArgoCD to be ready..."
 
-# Give Kubernetes a moment to create the pods
+# Give Kubernetes time to create the pods after kustomization
 log_info "Waiting for pods to be created..."
-sleep 10
+sleep 30
 
-log_info "Waiting for ArgoCD pods (timeout: 5 minutes)..."
+# Wait for pods to exist before checking readiness
+log_info "Checking if ArgoCD server pod exists..."
+RETRY_COUNT=0
+MAX_RETRIES=30
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if kubectl get pod -n "$ARGOCD_NAMESPACE" -l app.kubernetes.io/name=argocd-server --no-headers 2>/dev/null | grep -q argocd-server; then
+        log_info "✓ ArgoCD server pod found"
+        break
+    fi
+
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+        sleep 2
+    fi
+done
+
+if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+    log_error "ArgoCD server pod not created after 60 seconds"
+    log_info "Checking pod status..."
+    kubectl get pods -n "$ARGOCD_NAMESPACE"
+    exit 1
+fi
+
+log_info "Waiting for ArgoCD pods to become ready (timeout: 5 minutes)..."
 kubectl wait --for=condition=ready pod \
     -l app.kubernetes.io/name=argocd-server \
     -n "$ARGOCD_NAMESPACE" \
