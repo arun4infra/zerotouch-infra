@@ -7,9 +7,12 @@ metadata:
   labels:
     crossplane.io/xrd: xdragonflyinstances.database.bizmatters.io
 spec:
+  mode: Resources
   compositeTypeRef:
     apiVersion: database.bizmatters.io/v1alpha1
     kind: XDragonflyInstance
+  publishConnectionDetailsWithStoreConfigRef:
+    name: default
   
   resources:
     # Secret for cache credentials
@@ -51,6 +54,11 @@ spec:
         - type: ToCompositeFieldPath
           fromFieldPath: spec.forProvider.manifest.stringData.endpoint
           toFieldPath: status.endpoint
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
     
     # Service
     - name: dragonfly-service
@@ -83,6 +91,11 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: metadata.name
           toFieldPath: spec.forProvider.manifest.spec.selector.app
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
     
     # StatefulSet
     - name: dragonfly-statefulset
@@ -215,4 +228,10 @@ spec:
           transforms:
             - type: string
               string:
+                type: Format
                 fmt: "%dGi"
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
