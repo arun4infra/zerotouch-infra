@@ -18,3 +18,4 @@ bootstrap/talos/nodes/cp01-main/config.yaml.*
 # Temporary files
 *.log
 ztp-codebase.md
+.env.ssm.bkp
