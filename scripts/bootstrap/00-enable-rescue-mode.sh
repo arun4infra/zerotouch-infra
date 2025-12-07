@@ -11,10 +11,11 @@ set -e
 #
 # Usage:
 #   export HETZNER_API_TOKEN="your-api-token"
-#   ./scripts/bootstrap/00-enable-rescue-mode.sh [ENV]
+#   ./scripts/bootstrap/00-enable-rescue-mode.sh [ENV] [-y|--yes]
 #
 # Arguments:
 #   ENV - Environment name (default: dev)
+#   -y, --yes - Skip confirmation prompt
 
 # Colors for output
 RED='\033[0;31m'
@@ -28,6 +29,21 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 ENV="${1:-dev}"
+AUTO_YES=false
+
+# Parse arguments
+for arg in "$@"; do
+    case $arg in
+        -y|--yes)
+            AUTO_YES=true
+            shift
+            ;;
+        *)
+            ENV="$arg"
+            ;;
+    esac
+done
+
 VALUES_FILE="$REPO_ROOT/environments/$ENV/talos-values.yaml"
 HETZNER_API_URL="https://api.hetzner.cloud/v1"
 
@@ -304,11 +320,15 @@ paste <(echo "$WORKER_NAMES") <(echo "$WORKER_IPS") | while read -r name ip; do
 done
 
 echo "" >&2
-read -p "$(echo -e "${YELLOW}Continue with rescue mode activation for all servers? [y/N]:${NC} ")" -n 1 -r >&2
-echo >&2
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    log_warn "Operation cancelled"
-    exit 0
+if [[ "$AUTO_YES" == "false" ]]; then
+    read -p "$(echo -e "${YELLOW}Continue with rescue mode activation for all servers? [y/N]:${NC} ")" -n 1 -r >&2
+    echo >&2
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        log_warn "Operation cancelled"
+        exit 0
+    fi
+else
+    log_info "Auto-confirm enabled, proceeding with rescue mode activation"
 fi
 
 # Process control plane

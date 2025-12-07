@@ -40,6 +40,9 @@ else
     exit 1
 fi
 
+echo "Ensuring external-secrets namespace exists..."
+kubectl create namespace external-secrets --dry-run=client -o yaml | kubectl apply -f -
+
 echo "Creating aws-access-token secret in external-secrets namespace..."
 kubectl create secret generic aws-access-token \
   --namespace external-secrets \
