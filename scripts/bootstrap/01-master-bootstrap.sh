@@ -151,13 +151,9 @@ echo -e "${YELLOW}[5/13] Waiting for Cilium CNI...${NC}"
 echo -e "${YELLOW}[6/13] Injecting ESO secrets...${NC}"
 "$SCRIPT_DIR/07-inject-eso-secrets.sh"
 
-# Step 7: Verify ESO
-echo -e "${YELLOW}[7/13] Verifying ESO...${NC}"
-"$SCRIPT_DIR/08-verify-eso.sh"
-
-# Step 8: Inject SSM Parameters (BEFORE ArgoCD)
-echo -e "${YELLOW}[8/13] Injecting SSM parameters...${NC}"
-"$SCRIPT_DIR/09-inject-ssm-parameters.sh"
+# Step 7: Inject SSM Parameters (BEFORE ArgoCD)
+echo -e "${YELLOW}[7/13] Injecting SSM parameters...${NC}"
+"$SCRIPT_DIR/08-inject-ssm-parameters.sh"
 
 cat >> "$CREDENTIALS_FILE" << EOF
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -171,13 +167,17 @@ Verify parameters:
 
 EOF
 
-# Step 9: Install ArgoCD
-echo -e "${YELLOW}[9/13] Installing ArgoCD...${NC}"
-"$SCRIPT_DIR/10-install-argocd.sh"
+# Step 8: Install ArgoCD
+echo -e "${YELLOW}[8/13] Installing ArgoCD...${NC}"
+"$SCRIPT_DIR/09-install-argocd.sh"
 
-# Step 10: Wait for platform-bootstrap
-echo -e "${YELLOW}[10/13] Waiting for platform-bootstrap...${NC}"
-"$SCRIPT_DIR/11-wait-platform-bootstrap.sh"
+# Step 9: Wait for platform-bootstrap
+echo -e "${YELLOW}[9/13] Waiting for platform-bootstrap...${NC}"
+"$SCRIPT_DIR/10-wait-platform-bootstrap.sh"
+
+# Step 10: Verify ESO
+echo -e "${YELLOW}[10/13] Verifying ESO...${NC}"
+"$SCRIPT_DIR/11-verify-eso.sh"
 
 # Step 11: Verify child applications
 echo -e "${YELLOW}[11/13] Verifying child applications...${NC}"
