@@ -45,16 +45,26 @@ spec:
                   default: 20
                   minimum: 10
                   maximum: 1000
+                databaseName:
+                  type: string
+                  description: "Name of the application database to create (NOT postgres)"
+                  default: "app"
+                databaseOwner:
+                  type: string
+                  description: "Owner of the database - must match 'username' in credentialsSecretName"
+                  default: "app"
                 connectionSecretName:
                   type: string
-                  description: "Name of the connection secret to create"
+                  description: "Name of the connection secret to create for applications"
                 credentialsSecretName:
                   type: string
-                  description: "Name of app-provided secret with 'username' and 'password' keys for database bootstrap"
+                  description: "Name of kubernetes.io/basic-auth secret with 'username' and 'password' keys. Username must match databaseOwner."
               required:
                 - size
                 - connectionSecretName
                 - credentialsSecretName
+                - databaseName
+                - databaseOwner
             status:
               type: object
               properties:

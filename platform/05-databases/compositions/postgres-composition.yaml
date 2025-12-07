@@ -34,7 +34,7 @@ spec:
               stringData:
                 endpoint: ""
                 port: "5432"
-                database: "postgres"
+                database: ""
               # username and password are patched from app-provided credentials secret via references
           references:
             # Copy username from app-provided credentials secret
@@ -88,6 +88,10 @@ spec:
             string:
               fmt: "%s-rw.%s.svc.cluster.local"
           toFieldPath: spec.forProvider.manifest.stringData.endpoint
+        # Set database name from spec
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.databaseName
+          toFieldPath: spec.forProvider.manifest.stringData.database
       readinessChecks:
         - type: MatchCondition
           matchCondition:
@@ -95,6 +99,12 @@ spec:
             status: "True"
 
     # CNPG Cluster
+    # Uses the proper CNPG pattern:
+    # - initdb.secret provides username/password for the APPLICATION user (not superuser)
+    # - initdb.database is the application database name
+    # - initdb.owner is the application user (must match username in secret)
+    # - enableSuperuserAccess is FALSE (default) - postgres user has no password
+    # - CNPG creates {cluster}-app secret with app user credentials
     - name: cnpg-cluster
       base:
         apiVersion: kubernetes.crossplane.io/v1alpha2
@@ -113,14 +123,18 @@ spec:
                 storage:
                   size: 20Gi
                   storageClass: local-path
-                # Enable superuser access so CNPG creates a password for postgres user
-                enableSuperuserAccess: true
+                # DO NOT enable superuser access - use application user instead
+                # This follows CNPG security best practices
+                # enableSuperuserAccess: false (default)
                 bootstrap:
                   initdb:
-                    database: postgres
-                    # CNPG uses the 'username' from the secret as the database owner
-                    # Secret must have 'username' and 'password' keys
-                    # Do NOT set 'owner' here - let CNPG use the username from secret
+                    # Application database - NOT postgres
+                    database: app
+                    # Owner must match 'username' in the secret
+                    owner: app
+                    # Secret must be kubernetes.io/basic-auth type with:
+                    # - username: must match 'owner' above
+                    # - password: password for the application user
                     secret:
                       name: placeholder-credentials
                 # Node affinity to schedule on worker nodes with database label
@@ -152,6 +166,16 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.name
           toFieldPath: spec.forProvider.manifest.metadata.name
+        
+        # Database name - application database (not postgres)
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.databaseName
+          toFieldPath: spec.forProvider.manifest.spec.bootstrap.initdb.database
+        
+        # Owner - must match username in credentials secret
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.databaseOwner
+          toFieldPath: spec.forProvider.manifest.spec.bootstrap.initdb.owner
         
         # Credentials secret - use app-provided secret for database bootstrap
         - type: FromCompositeFieldPath
