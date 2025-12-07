@@ -24,7 +24,7 @@ spec:
       source:
         repoURL: '{{repoURL}}'
         targetRevision: '{{targetRevision}}'
-        path: '{{path}}'
+        path: '{{appPath}}'
         directory:
           recurse: true
       destination:
