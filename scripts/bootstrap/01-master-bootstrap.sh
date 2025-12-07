@@ -518,39 +518,81 @@ Verify parameters:
 EOF
 
 # Step 4.7: Wait for ArgoCD Repository Credentials to Sync from SSM
-echo -e "${YELLOW}[4.7/5] Waiting for ArgoCD Repository Credentials...${NC}"
+echo -e "${YELLOW}[4.7/5] Configuring ArgoCD Repository Credentials...${NC}"
 echo "────────────────────────────────────────────────────────────────"
 
-echo -e "${BLUE}ℹ  Repository credentials are synced from AWS SSM via ExternalSecrets${NC}"
-echo -e "${BLUE}⏳ Waiting for ExternalSecret to sync registry credentials...${NC}"
+# Check if tenant ApplicationSet is deployed (requires private repo credentials)
+TENANT_APPSET_EXISTS=false
+if [ -f "$SCRIPT_DIR/../../bootstrap/components/99-tenants.yaml" ]; then
+    TENANT_APPSET_EXISTS=true
+    echo -e "${BLUE}ℹ  Found tenant ApplicationSet (99-tenants.yaml) - private repo credentials required${NC}"
+fi
 
-# Wait for ExternalSecret to be ready
-if kubectl_retry wait --for=condition=Ready externalsecret/repo-zerotouch-tenants \
-  -n argocd --timeout=120s 2>/dev/null; then
+# Check if ExternalSecret for tenant registry exists
+if kubectl_retry get externalsecret repo-zerotouch-tenants -n argocd &>/dev/null; then
+    echo -e "${BLUE}ℹ  Repository credentials are synced from AWS SSM via ExternalSecrets${NC}"
+    echo -e "${BLUE}⏳ Waiting for ExternalSecret to sync registry credentials...${NC}"
 
-    # Verify the secret was created
-    if kubectl_retry get secret repo-zerotouch-tenants -n argocd &>/dev/null; then
-        echo -e "${GREEN}✓ Registry repository credentials synced from SSM${NC}"
+    # Wait for ExternalSecret to be ready
+    if kubectl_retry wait --for=condition=Ready externalsecret/repo-zerotouch-tenants \
+      -n argocd --timeout=120s 2>/dev/null; then
+
+        # Verify the secret was created
+        if kubectl_retry get secret repo-zerotouch-tenants -n argocd &>/dev/null; then
+            echo -e "${GREEN}✓ Registry repository credentials synced from SSM${NC}"
+        else
+            echo -e "${RED}✗ ERROR: ExternalSecret ready but secret not found${NC}"
+            echo -e "${YELLOW}Check: kubectl describe externalsecret repo-zerotouch-tenants -n argocd${NC}"
+            exit 1
+        fi
     else
-        echo -e "${RED}✗ ExternalSecret ready but secret not found${NC}"
-        echo -e "${YELLOW}Check: kubectl describe externalsecret repo-zerotouch-tenants -n argocd${NC}"
-        exit 1
+        # ExternalSecret failed to sync
+        echo -e "${RED}✗ ERROR: Failed to sync repository credentials from SSM${NC}"
+        echo ""
+        echo -e "${YELLOW}Troubleshooting:${NC}"
+        echo -e "  1. Verify AWS SSM parameters exist:"
+        echo -e "     ${GREEN}aws ssm get-parameter --name /zerotouch/prod/argocd/repos/zerotouch-tenants/url${NC}"
+        echo -e "  2. Check ExternalSecret status:"
+        echo -e "     ${GREEN}kubectl describe externalsecret repo-zerotouch-tenants -n argocd${NC}"
+        echo -e "  3. Check ESO ClusterSecretStore:"
+        echo -e "     ${GREEN}kubectl get clustersecretstore aws-parameter-store -o yaml${NC}"
+        echo -e "  4. Verify .env.ssm has the required parameters and run:"
+        echo -e "     ${GREEN}./scripts/bootstrap/06-inject-ssm-parameters.sh${NC}"
+        echo ""
+        
+        # FAIL FAST: If tenant ApplicationSet exists, credentials are REQUIRED
+        if [ "$TENANT_APPSET_EXISTS" = true ]; then
+            echo -e "${RED}✗ FATAL: Tenant ApplicationSet requires repository credentials${NC}"
+            echo -e "${RED}   Bootstrap cannot continue without valid credentials${NC}"
+            exit 1
+        else
+            echo -e "${YELLOW}⚠️  WARNING: Repository credentials failed but no tenant ApplicationSet found${NC}"
+            echo -e "${BLUE}ℹ  Continuing bootstrap (no private repos required)${NC}"
+        fi
     fi
 else
-    echo -e "${RED}✗ Failed to sync repository credentials from SSM${NC}"
-    echo ""
-    echo -e "${YELLOW}Troubleshooting:${NC}"
-    echo -e "  1. Verify AWS SSM parameters exist:"
-    echo -e "     ${GREEN}aws ssm get-parameter --name /zerotouch/prod/argocd/repos/zerotouch-tenants/url${NC}"
-    echo -e "  2. Check ExternalSecret status:"
-    echo -e "     ${GREEN}kubectl get externalsecret repo-zerotouch-tenants -n argocd -o yaml${NC}"
-    echo -e "  3. Check ESO ClusterSecretStore:"
-    echo -e "     ${GREEN}kubectl get clustersecretstore aws-parameter-store -o yaml${NC}"
-    echo ""
-    echo -e "${YELLOW}Emergency fallback:${NC}"
-    echo -e "  ${GREEN}./scripts/bootstrap/07-add-private-repo.sh --auto${NC}"
-    echo ""
-    exit 1
+    # No ExternalSecret found
+    if [ "$TENANT_APPSET_EXISTS" = true ]; then
+        # FAIL FAST: Tenant ApplicationSet exists but no credentials configured
+        echo -e "${RED}✗ FATAL: Tenant ApplicationSet requires repository credentials${NC}"
+        echo ""
+        echo -e "${RED}The bootstrap includes 99-tenants.yaml which requires:${NC}"
+        echo -e "${RED}  - ExternalSecret: repo-zerotouch-tenants${NC}"
+        echo -e "${RED}  - AWS SSM parameters for tenant registry${NC}"
+        echo ""
+        echo -e "${YELLOW}To fix:${NC}"
+        echo -e "  1. Ensure .env.ssm has these parameters:"
+        echo -e "     ${GREEN}/zerotouch/prod/argocd/repos/zerotouch-tenants/url${NC}"
+        echo -e "     ${GREEN}/zerotouch/prod/argocd/repos/zerotouch-tenants/username${NC}"
+        echo -e "     ${GREEN}/zerotouch/prod/argocd/repos/zerotouch-tenants/password${NC}"
+        echo -e "  2. Run: ${GREEN}./scripts/bootstrap/06-inject-ssm-parameters.sh${NC}"
+        echo -e "  3. Ensure argocd-repo-registry.yaml is deployed"
+        echo ""
+        exit 1
+    else
+        echo -e "${BLUE}ℹ  No private repository credentials configured${NC}"
+        echo -e "${BLUE}ℹ  No tenant ApplicationSet found - continuing without private repos${NC}"
+    fi
 fi
 
 cat >> "$CREDENTIALS_FILE" << EOF
