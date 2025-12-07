@@ -17,7 +17,7 @@ spec:
   resources:
     # Connection Secret - creates secret with claim-specified name
     # This ensures workloads depend on the claim contract, not CNPG implementation details
-    # The secret copies connection details from CNPG-generated secret
+    # The secret copies username/password from app-provided credentials secret (from SSM)
     - name: connection-secret
       base:
         apiVersion: kubernetes.crossplane.io/v1alpha2
@@ -35,15 +35,22 @@ spec:
                 endpoint: ""
                 port: "5432"
                 database: "postgres"
-                username: "postgres"
-              # Note: password is NOT in stringData - it's patched from CNPG secret via references
-              # If password were in stringData, it would override the data.password from references
+              # username and password are patched from app-provided credentials secret via references
           references:
+            # Copy username from app-provided credentials secret
             - patchesFrom:
                 apiVersion: v1
                 kind: Secret
                 namespace: placeholder
-                name: placeholder-app
+                name: placeholder-credentials
+                fieldPath: data.username
+              toFieldPath: data.username
+            # Copy password from app-provided credentials secret
+            - patchesFrom:
+                apiVersion: v1
+                kind: Secret
+                namespace: placeholder
+                name: placeholder-credentials
                 fieldPath: data.password
               toFieldPath: data.password
           providerConfigRef:
@@ -57,20 +64,21 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.namespace
           toFieldPath: spec.forProvider.manifest.metadata.namespace
-        # Reference namespace for CNPG secret
+        # Reference namespace for credentials secret
         - type: FromCompositeFieldPath
           fromFieldPath: spec.claimRef.namespace
           toFieldPath: spec.references[0].patchesFrom.namespace
-        # Reference the CNPG-generated secret ({claim-name}-app)
         - type: FromCompositeFieldPath
-          fromFieldPath: spec.claimRef.name
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.references[1].patchesFrom.namespace
+        # Reference the app-provided credentials secret
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.credentialsSecretName
           toFieldPath: spec.references[0].patchesFrom.name
-          transforms:
-            - type: string
-              string:
-                type: Format
-                fmt: "%s-app"
-        # Set endpoint using claim name and namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.credentialsSecretName
+          toFieldPath: spec.references[1].patchesFrom.name
+        # Set endpoint (FQDN) using claim name and namespace
         - type: CombineFromComposite
           combine:
             variables:
@@ -109,8 +117,9 @@ spec:
                   initdb:
                     database: postgres
                     owner: postgres
-                    # Use deterministic secret name from claim
-                    secretName: placeholder-secret
+                    # Use app-provided credentials secret for database bootstrap
+                    secret:
+                      name: placeholder-credentials
                 # Node affinity to schedule on worker nodes with database label
                 affinity:
                   nodeAffinity:
@@ -141,10 +150,10 @@ spec:
           fromFieldPath: spec.claimRef.name
           toFieldPath: spec.forProvider.manifest.metadata.name
         
-        # Secret name - use claim name (CNPG will create {name}-app)
+        # Credentials secret - use app-provided secret for database bootstrap
         - type: FromCompositeFieldPath
-          fromFieldPath: spec.claimRef.name
-          toFieldPath: spec.forProvider.manifest.spec.bootstrap.initdb.secretName
+          fromFieldPath: spec.credentialsSecretName
+          toFieldPath: spec.forProvider.manifest.spec.bootstrap.initdb.secret.name
         
         # Size-based resource patches
         - type: FromCompositeFieldPath
