@@ -35,11 +35,15 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Include field descriptions and validation rules
   - _Requirements: 2, 3, 4, 5, 6, 7, 8_
 
-- [ ] 3. Implement Crossplane Composition
+- [x] 3. Implement Crossplane Composition
   - Create file `platform/04-apis/compositions/event-driven-service-composition.yaml`
-  - Configure Composition to use Pipeline mode with patch-and-transform function
+  - Configure Composition to use Pipeline mode with 2-step pipeline:
+    - Step 1: patch-and-transform (base resources and static patches)
+    - Step 2: function-eventdrivenservice (dynamic secretRefs and initContainer)
   - Set compositeTypeRef to XEventDrivenService
-  - **Must complete subtasks 3.1-3.10 before marking this task complete**
+  - **Implementation:** All subtasks 3.1-3.10 completed
+  - **Custom Function:** `platform/04-apis/functions/eventdrivenservice/main.go` (handles subtasks 3.5, 3.7)
+  - **Note:** Function must be built and deployed before composition works (see deployment guide)
   - _Requirements: 2_
 
 - [x] 3.1 Implement ServiceAccount resource template
@@ -121,6 +125,16 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Patch name to {claim-name}-scaler
   - Apply standard labels
   - _Requirements: 12, 15_
+
+- [-] 3.11 Build and deploy custom Crossplane function
+  - Navigate to `platform/04-apis/functions/eventdrivenservice/`
+  - Verify AWS SSM parameters exist for GHCR credentials
+  - Run `./build-and-push.sh` to build and push function image
+  - Apply Function package to cluster: `kubectl apply -f package.yaml`
+  - Verify function pod is running in crossplane-system namespace
+  - Check function logs for any errors
+  - **Note:** This step is REQUIRED before the composition can process secretRefs and initContainer
+  - _Requirements: 2, 6, 8_
 
 - [ ] 4. Create schema publication script
   - Create file `scripts/publish-schema.sh`
