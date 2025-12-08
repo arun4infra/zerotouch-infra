@@ -125,6 +125,7 @@ spec:
             type: Ready
             status: "True"
     # Connection Secret - copies from CNPG -app secret to {claim-name}-conn
+    # Uses standard environment variable names for envFrom compatibility
     - name: connection-secret
       base:
         apiVersion: kubernetes.crossplane.io/v1alpha2
@@ -139,7 +140,8 @@ spec:
                 namespace: placeholder
               type: Opaque
               stringData:
-                port: "5432"
+                POSTGRES_PORT: "5432"
+                POSTGRES_SCHEMA: "public"
           references:
             - patchesFrom:
                 apiVersion: v1
@@ -147,21 +149,21 @@ spec:
                 namespace: placeholder
                 name: placeholder-app
                 fieldPath: data.username
-              toFieldPath: data.username
+              toFieldPath: data.POSTGRES_USER
             - patchesFrom:
                 apiVersion: v1
                 kind: Secret
                 namespace: placeholder
                 name: placeholder-app
                 fieldPath: data.password
-              toFieldPath: data.password
+              toFieldPath: data.POSTGRES_PASSWORD
             - patchesFrom:
                 apiVersion: v1
                 kind: Secret
                 namespace: placeholder
                 name: placeholder-app
                 fieldPath: data.dbname
-              toFieldPath: data.database
+              toFieldPath: data.POSTGRES_DB
           providerConfigRef:
             name: kubernetes-provider
       patches:
@@ -213,7 +215,7 @@ spec:
             string:
               fmt: "%s-app"
           toFieldPath: spec.references[2].patchesFrom.name
-        # Computed endpoint
+        # Computed endpoint (POSTGRES_HOST)
         - type: CombineFromComposite
           combine:
             variables:
@@ -222,7 +224,7 @@ spec:
             strategy: string
             string:
               fmt: "%s-rw.%s.svc.cluster.local"
-          toFieldPath: spec.forProvider.manifest.stringData.endpoint
+          toFieldPath: spec.forProvider.manifest.stringData.POSTGRES_HOST
       readinessChecks:
         - type: MatchCondition
           matchCondition:

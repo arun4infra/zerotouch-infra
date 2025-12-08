@@ -241,7 +241,7 @@ spec:
             status: "True"
 
     # Connection Secret - Zero-Touch Pattern
-    # Auto-creates {claim-name}-conn with endpoint, port, password
+    # Auto-creates {claim-name}-conn with standard environment variable names
     - name: connection-secret
       base:
         apiVersion: kubernetes.crossplane.io/v1alpha2
@@ -255,7 +255,7 @@ spec:
                 namespace: placeholder
               type: Opaque
               stringData:
-                port: "6379"
+                DRAGONFLY_PORT: "6379"
           references:
             # Copy password from auto-generated password secret
             - patchesFrom:
@@ -264,7 +264,7 @@ spec:
                 namespace: placeholder
                 name: placeholder-password
                 fieldPath: data.password
-              toFieldPath: data.password
+              toFieldPath: data.DRAGONFLY_PASSWORD
           providerConfigRef:
             name: kubernetes-provider
       patches:
@@ -294,7 +294,7 @@ spec:
             string:
               fmt: "%s-password"
           toFieldPath: spec.references[0].patchesFrom.name
-        # Computed endpoint: {claim-name}.{namespace}.svc.cluster.local
+        # Computed endpoint (DRAGONFLY_HOST)
         - type: CombineFromComposite
           combine:
             variables:
@@ -303,7 +303,7 @@ spec:
             strategy: string
             string:
               fmt: "%s.%s.svc.cluster.local"
-          toFieldPath: spec.forProvider.manifest.stringData.endpoint
+          toFieldPath: spec.forProvider.manifest.stringData.DRAGONFLY_HOST
         # Update status with endpoint
         - type: CombineFromComposite
           combine:
