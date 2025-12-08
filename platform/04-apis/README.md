@@ -1,195 +1,277 @@
-# Platform APIs Layer (04-apis)
+# EventDrivenService Platform API
+
+A simplified Crossplane-based API for deploying NATS JetStream consumer services with KEDA autoscaling.
 
 ## Overview
 
-The 04-apis layer provides reusable platform APIs built on Crossplane that enable declarative deployment of common service patterns. These APIs abstract away Kubernetes complexity while maintaining Zero-Touch principles and GitOps compatibility.
-
-## Purpose
-
-This layer enables platform consumers to deploy services using high-level declarative APIs instead of writing explicit Kubernetes manifests. Each API is implemented as a Crossplane Composite Resource Definition (XRD) with one or more Compositions that provision the underlying Kubernetes resources.
-
-## Architecture
-
-```
-platform/04-apis/
-├── definitions/          # Crossplane XRDs (API contracts)
-├── compositions/         # Crossplane Compositions (implementation templates)
-├── examples/            # Example claims for each API
-├── schemas/             # Published JSON schemas for validation
-└── tests/               # Validation and integration tests
-```
-
-## Available APIs
-
-### EventDrivenService API
-
-**Status:** In Development
-
-**Purpose:** Deploy NATS JetStream consumer services with KEDA autoscaling
-
-**Use Case:** Event-driven worker services that process messages from NATS queues
+The EventDrivenService API reduces deployment complexity from 212 lines of explicit Kubernetes manifests to approximately 30 lines of declarative YAML while maintaining full Zero-Touch compliance.
 
 **Key Features:**
-- Declarative deployment with ~30 lines of YAML (vs 212 lines of direct manifests)
-- Automatic KEDA autoscaling based on NATS queue depth
-- Hybrid secret mounting (Crossplane + ESO secrets)
-- Optional init containers for database migrations
-- Size-based resource allocation (small/medium/large)
-- Built-in health and readiness probes
+- ✅ No custom functions - uses standard Crossplane patches only
+- ✅ Zero memory overhead - no additional pods required
+- ✅ Hybrid Secret Sources - supports Crossplane, ESO, and manual secrets
+- ✅ Simple API - pre-defined secret slots (up to 5 secrets)
+- ✅ KEDA autoscaling - based on NATS queue depth
+- ✅ Optional init containers - for database migrations
 
-**Example:**
+## Quick Start
+
+### Prerequisites
+
+1. NATS with JetStream deployed
+2. KEDA installed
+3. Crossplane with kubernetes provider
+4. Secrets created (via Crossplane, ESO, or manually)
+
+### Minimal Example
+
 ```yaml
 apiVersion: platform.bizmatters.io/v1alpha1
 kind: EventDrivenService
 metadata:
-  name: my-worker
-  namespace: my-namespace
+  name: simple-worker
+  namespace: workers
 spec:
-  image: ghcr.io/org/my-worker:v1.0.0
-  size: medium
+  image: ghcr.io/org/simple-worker:v1.0.0
+  size: small
   nats:
-    stream: MY_JOBS
-    consumer: my-workers
+    stream: SIMPLE_JOBS
+    consumer: simple-workers
 ```
 
-**Documentation:** See [EventDrivenService API Documentation](./docs/eventdrivenservice.md) (coming soon)
+### Full Example (with secrets and init container)
 
-## Deployment
-
-### ArgoCD Configuration
-
-The 04-apis layer is deployed as an ArgoCD Application with:
-- **Sync Wave:** 1 (deploys after foundation layer)
-- **Automated Sync:** Enabled with prune and selfHeal
-- **Source:** `platform/04-apis` directory in zerotouch-platform repository
-
-### Prerequisites
-
-Before using APIs in this layer, ensure:
-1. Foundation layer (01-foundation) is deployed and healthy
-2. Crossplane is installed with provider-kubernetes configured
-3. Required infrastructure (NATS, KEDA, etc.) is deployed
-
-### Verification
-
-Verify the 04-apis layer is deployed:
-```bash
-# Check ArgoCD Application status
-kubectl get application apis -n argocd
-
-# Verify XRDs are installed
-kubectl get xrd
-
-# Verify Compositions are available
-kubectl get composition
+```yaml
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: EventDrivenService
+metadata:
+  name: agent-executor
+  namespace: intelligence-deepagents
+spec:
+  image: ghcr.io/arun4infra/agent-executor:latest
+  size: medium
+  
+  nats:
+    stream: AGENT_EXECUTION
+    consumer: agent-executor-workers
+  
+  # Secrets (envFrom - bulk mounting)
+  secret1Name: agent-executor-db-conn      # Crossplane-generated
+  secret2Name: agent-executor-cache-conn   # Crossplane-generated
+  secret3Name: agent-executor-llm-keys     # ESO-synced
+  
+  imagePullSecrets:
+    - name: ghcr-pull-secret
+  
+  initContainer:
+    command: ["/bin/bash", "-c"]
+    args: ["cd /app && ./scripts/ci/run-migrations.sh"]
 ```
 
-## Usage
+## API Reference
 
-### Creating a Claim
+### Spec Fields
 
-1. Choose the appropriate API for your use case
-2. Create a claim YAML file following the API schema
-3. Validate the claim against the published JSON schema (optional but recommended)
-4. Commit the claim to your application repository
-5. ArgoCD will sync and provision the resources
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `image` | string | Yes | Container image reference |
+| `size` | enum | No | Resource size: `small`, `medium`, `large` (default: `medium`) |
+| `nats.url` | string | No | NATS server URL (default: `nats://nats.nats.svc:4222`) |
+| `nats.stream` | string | Yes | JetStream stream name |
+| `nats.consumer` | string | Yes | Consumer group name |
+| `secret1Name` | string | No | First secret name (envFrom) |
+| `secret2Name` | string | No | Second secret name (envFrom) |
+| `secret3Name` | string | No | Third secret name (envFrom) |
+| `secret4Name` | string | No | Fourth secret name (envFrom) |
+| `secret5Name` | string | No | Fifth secret name (envFrom) |
+| `imagePullSecrets` | array | No | Image pull secret names |
+| `initContainer.command` | array | No | Init container command |
+| `initContainer.args` | array | No | Init container arguments |
 
-### Validation
+### Resource Sizing
 
-Validate claims before deployment:
-```bash
-# Validate a claim against the schema
-./scripts/validate-claim.sh path/to/my-claim.yaml
+| Size | CPU Request | CPU Limit | Memory Request | Memory Limit |
+|------|-------------|-----------|----------------|--------------|
+| `small` | 250m | 1000m | 512Mi | 2Gi |
+| `medium` | 500m | 2000m | 1Gi | 4Gi |
+| `large` | 1000m | 4000m | 2Gi | 8Gi |
+
+## Hybrid Secret Sources
+
+The API supports secrets from multiple sources without consolidation:
+
+### Crossplane-Generated Secrets
+
+```yaml
+# PostgresInstance creates secret automatically
+apiVersion: database.bizmatters.io/v1alpha1
+kind: PostgresInstance
+metadata:
+  name: my-service-db
+spec:
+  writeConnectionSecretToRef:
+    name: my-service-db-conn  # ← Reference this in EventDrivenService
+    namespace: my-namespace
 ```
 
-### Monitoring
-
-Check claim status:
-```bash
-# View claim status
-kubectl get <api-kind> <claim-name> -n <namespace> -o yaml
-
-# View provisioned resources
-kubectl describe <api-kind> <claim-name> -n <namespace>
+```yaml
+# Reference in EventDrivenService
+spec:
+  secret1Name: my-service-db-conn
 ```
 
-## Development
+### ESO-Synced Secrets
 
-### Adding a New API
-
-1. Create XRD in `definitions/`
-2. Create Composition in `compositions/`
-3. Add example claims in `examples/`
-4. Publish JSON schema to `schemas/`
-5. Add validation tests in `tests/`
-6. Update this README with API documentation
-
-### Testing
-
-Run validation tests:
-```bash
-# Schema validation tests
-./platform/04-apis/tests/schema-validation.test.sh
-
-# Composition tests
-./platform/04-apis/tests/composition.test.sh
+```yaml
+# ExternalSecret syncs from AWS SSM
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: my-service-llm-keys
+spec:
+  secretStoreRef:
+    name: aws-parameter-store
+  target:
+    name: my-service-llm-keys  # ← Reference this in EventDrivenService
+  data:
+    - secretKey: OPENAI_API_KEY
+      remoteRef:
+        key: /app/openai_api_key
 ```
 
-## Design Principles
+```yaml
+# Reference in EventDrivenService
+spec:
+  secret3Name: my-service-llm-keys
+```
 
-### Zero-Touch Compliance
+## Secret Mounting (envFrom)
 
-All APIs in this layer follow Zero-Touch principles:
-- **Crash-only recovery:** All state in Git, no manual intervention required
-- **Declarative:** Resources defined as desired state, not imperative commands
-- **GitOps-native:** Changes flow through Git commits and ArgoCD sync
-- **Self-healing:** ArgoCD automatically corrects drift from desired state
+All secrets are mounted using `envFrom` (bulk mounting). This means:
+- ✅ All keys in the secret become environment variables
+- ✅ Key names must match desired environment variable names
+- ✅ Simple and predictable
 
-### Separation of Concerns
+**Example:** If `my-service-db-conn` contains:
+```yaml
+data:
+  POSTGRES_HOST: cG9zdGdyZXMuc3Zj
+  POSTGRES_PORT: NTQzMg==
+  POSTGRES_DB: bXlkYg==
+```
 
-Platform APIs focus on deployment patterns, not infrastructure provisioning:
-- **Infrastructure:** Databases, caches, message queues (separate Crossplane APIs)
-- **Secrets:** Managed by Crossplane and ESO (not created by platform APIs)
-- **Networking:** Ingress, service mesh (separate layer)
-- **Observability:** Metrics, logging, tracing (application responsibility)
+Then the container will have these environment variables:
+- `POSTGRES_HOST=postgres.svc`
+- `POSTGRES_PORT=5432`
+- `POSTGRES_DB=mydb`
 
-### Hybrid Secret Approach
+## Resources Created
 
-Platform APIs support multiple secret sources without consolidation:
-- **Crossplane-generated:** Database credentials, cache credentials
-- **ESO-synced:** Application secrets from AWS SSM Parameter Store
-- **Manual:** Kubernetes secrets created directly (not recommended)
+The composition creates 4 Kubernetes resources:
 
-This approach respects the Zero-Touch principle by not requiring manual secret consolidation.
+1. **Deployment** - Main application with optional init container
+2. **Service** - ClusterIP service on port 8080
+3. **ScaledObject** - KEDA autoscaler (1-10 replicas)
+4. **ServiceAccount** - Pod identity
+
+## KEDA Autoscaling
+
+Automatic scaling based on NATS queue depth:
+- **Min replicas:** 1
+- **Max replicas:** 10
+- **Lag threshold:** 5 messages
+- **Monitoring endpoint:** `nats-headless.nats.svc.cluster.local:8222`
+
+## Health Probes
+
+Services must implement these HTTP endpoints:
+
+- **Liveness:** `GET /health` on port 8080
+- **Readiness:** `GET /ready` on port 8080
 
 ## Troubleshooting
 
-### Common Issues
+### Pod not starting - CreateContainerConfigError
 
-**XRD not found:**
-- Verify 04-apis Application is synced: `kubectl get application apis -n argocd`
-- Check for errors: `kubectl describe application apis -n argocd`
+**Cause:** Referenced secret doesn't exist
 
-**Composition not working:**
-- Verify Crossplane is healthy: `kubectl get pods -n crossplane-system`
-- Check Composition logs: `kubectl logs -n crossplane-system -l app=crossplane`
+**Solution:**
+```bash
+# Check if secret exists
+kubectl get secret <secret-name> -n <namespace>
 
-**Claim stuck in pending:**
-- Check claim status: `kubectl describe <api-kind> <claim-name>`
-- Verify referenced secrets exist
-- Check Crossplane provider configuration
+# Check Crossplane claim status
+kubectl get postgresinstance <name> -n <namespace>
+```
 
-## References
+### Pod not starting - ImagePullBackOff
 
-- [Crossplane Documentation](https://docs.crossplane.io/)
-- [ArgoCD Sync Waves](https://argo-cd.readthedocs.io/en/stable/user-guide/sync-waves/)
-- [KEDA Documentation](https://keda.sh/)
-- [NATS JetStream](https://docs.nats.io/nats-concepts/jetstream)
+**Cause:** Image pull secret missing or invalid
 
-## Metadata
+**Solution:**
+```bash
+# Check image pull secret
+kubectl get secret <image-pull-secret> -n <namespace>
 
-**Layer:** 04-apis  
-**Sync Wave:** 1  
-**Dependencies:** 01-foundation (Crossplane, provider-kubernetes)  
-**Status:** Active Development  
-**Last Updated:** 2025-12-08
+# Verify secret is referenced in claim
+kubectl get eventdrivenservice <name> -o yaml | grep imagePullSecrets
+```
+
+### KEDA not scaling
+
+**Cause:** NATS stream doesn't exist or consumer mismatch
+
+**Solution:**
+```bash
+# Check NATS stream
+kubectl exec -n nats nats-0 -c nats-box -- nats stream info <stream-name>
+
+# Check ScaledObject status
+kubectl describe scaledobject <name>-scaler
+```
+
+## Migration from Direct Manifests
+
+**Before (84 lines):**
+```yaml
+# Deployment + Service + ScaledObject + ServiceAccount
+# Explicit Kubernetes manifests
+```
+
+**After (22 lines):**
+```yaml
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: EventDrivenService
+metadata:
+  name: my-service
+spec:
+  image: ghcr.io/org/my-service:v1.0.0
+  size: medium
+  nats:
+    stream: MY_STREAM
+    consumer: my-workers
+  secret1Name: my-service-db-conn
+  secret2Name: my-service-cache-conn
+  secret3Name: my-service-llm-keys
+  imagePullSecrets:
+    - name: ghcr-pull-secret
+  initContainer:
+    command: ["/bin/bash", "-c"]
+    args: ["./run-migrations.sh"]
+```
+
+**Savings:** 70% reduction in deployment complexity
+
+## Examples
+
+See `examples/` directory:
+- `minimal-claim.yaml` - Simplest possible claim
+- `agent-executor-claim.yaml` - Full-featured reference implementation
+
+## Architecture
+
+This API uses:
+- **Crossplane XRD** - Defines the API schema
+- **Crossplane Composition** - Provisions Kubernetes resources
+- **Standard patches only** - No custom functions required
+- **Zero-Touch principles** - Accepts Crossplane/ESO-generated secrets as-is

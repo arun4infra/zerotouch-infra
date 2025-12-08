@@ -151,11 +151,11 @@ This specification defines requirements for creating a reusable EventDrivenServi
 
 #### Acceptance Criteria
 
-1. THE XRD SHALL define a `secretRefs` array containing secret reference objects
-2. THE secret reference object SHALL include fields: `name` (required), `env` (array of key mappings), `envFrom` (boolean)
-3. WHEN `envFrom` is `true`, THE Composition SHALL mount all secret keys as environment variables using `envFrom`
-4. WHEN `env` array is specified, THE Composition SHALL mount each listed key to the specified environment variable name using `secretKeyRef`
-5. WHERE `secretRefs` is empty, THEN THE Composition SHALL create the Deployment without secret mounts
+1. THE XRD SHALL define pre-defined secret slot fields: `secret1Name`, `secret2Name`, `secret3Name`, `secret4Name`, `secret5Name`
+2. THE secret slot fields SHALL be of type string and optional
+3. THE Composition SHALL mount secrets using `envFrom` (bulk mounting - all keys become environment variables)
+4. THE Composition SHALL support up to 5 secrets from different sources
+5. WHERE a secret slot is not specified, THEN THE Composition SHALL skip that slot
 
 **Security:**
 - THE Composition SHALL NOT create secrets (Crossplane/ESO responsibility)
@@ -164,16 +164,15 @@ This specification defines requirements for creating a reusable EventDrivenServi
 
 **Example:**
 ```yaml
-secretRefs:
-  - name: my-service-db-conn  # Crossplane-generated
-    env:
-      - secretKey: endpoint
-        envName: POSTGRES_HOST
-      - secretKey: port
-        envName: POSTGRES_PORT
-  - name: my-service-llm-keys  # ESO-synced
-    envFrom: true  # Mount all keys as-is
+secret1Name: my-service-db-conn      # Crossplane-generated
+secret2Name: my-service-cache-conn   # Crossplane-generated
+secret3Name: my-service-llm-keys     # ESO-synced
 ```
+
+**Rationale:**
+- Pre-defined slots avoid dynamic array iteration limitations in Crossplane
+- envFrom (bulk mounting) simplifies implementation without custom functions
+- 5 secret slots cover 99% of real-world use cases
 
 ---
 

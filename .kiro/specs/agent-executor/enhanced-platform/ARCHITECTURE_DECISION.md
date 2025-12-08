@@ -82,35 +82,12 @@ spec:
     stream: MY_STREAM
     consumer: my-service-workers
 
-  # Multiple secrets (hybrid approach)
-  secretRefs:
-    # Crossplane-generated database secret (optional)
-    - name: my-service-db-conn
-      env:
-        - secretKey: endpoint
-          envName: POSTGRES_HOST
-        - secretKey: port
-          envName: POSTGRES_PORT
-        - secretKey: database
-          envName: POSTGRES_DB
-        - secretKey: username
-          envName: POSTGRES_USER
-        - secretKey: password
-          envName: POSTGRES_PASSWORD
-
-    # Crossplane-generated cache secret (optional)
-    - name: my-service-cache-conn
-      env:
-        - secretKey: endpoint
-          envName: DRAGONFLY_HOST
-        - secretKey: port
-          envName: DRAGONFLY_PORT
-        - secretKey: password
-          envName: DRAGONFLY_PASSWORD
-
-    # ESO-synced application secrets (optional, bulk mount)
-    - name: my-service-llm-keys
-      envFrom: true  # Mount all keys as-is
+  # Multiple secrets (hybrid approach - pre-defined slots)
+  # Simplified API: up to 5 secrets using envFrom (bulk mounting)
+  secret1Name: my-service-db-conn      # Crossplane-generated database secret
+  secret2Name: my-service-cache-conn   # Crossplane-generated cache secret
+  secret3Name: my-service-llm-keys     # ESO-synced application secrets
+  # secret4Name and secret5Name available if needed
 
   # Image pull secrets (optional)
   imagePullSecrets:
@@ -285,39 +262,69 @@ initContainer:
 
 ---
 
-## Implementation Scope
+## Implementation Approach: Pre-Defined Secret Slots
 
-### Phase 1: XRD Definition (1-2 days)
+**Decision Date:** 2025-12-08  
+**Status:** ✅ Implemented
 
-- Create `platform/04-apis/definitions/xeventdrivenservices.yaml`
-- Define schema with `secretRefs`, `nats`, `size`, `initContainer`
-- Document all fields with examples
-- Enable `platform/04-apis.yaml` (currently disabled)
+### Pragmatic Simplification
 
-### Phase 2: Composition (2-3 days)
+The original design used dynamic arrays (`secretRefs[]`) which required a custom Crossplane function. During implementation, we discovered:
 
-- Create `platform/04-apis/compositions/event-driven-service-composition.yaml`
-- Implement Deployment, Service, KEDA ScaledObject creation
-- Map `size` to resource limits
-- Handle optional init container
-- Wire multiple `secretRefs` to env vars
+1. **Custom function complexity** - Required Go code, Docker image, gRPC server
+2. **Package format issues** - Function failed to install due to packaging errors
+3. **Memory overhead** - Additional pod in crossplane-system (~50-100MB)
+4. **Maintenance burden** - Complex codebase to maintain
 
-### Phase 3: Validation (1 day)
+**Solution:** Use **pre-defined secret slots** instead of dynamic arrays.
 
-- Migrate agent-executor to use EventDrivenService API
-- Compare deployed resources (should be identical)
-- Test KEDA autoscaling
-- Verify init container migrations
-- Ensure all secrets mount correctly
+### API Changes
 
-### Phase 4: Documentation (1 day)
+**Before (dynamic array):**
+```yaml
+secretRefs:
+  - name: my-service-db-conn
+    env: [...]
+  - name: my-service-cache-conn
+    env: [...]
+```
 
-- Update `platform/04-apis/README.md`
-- Create example claims for different patterns
-- Document troubleshooting steps
-- Add to deployment guides
+**After (pre-defined slots):**
+```yaml
+secret1Name: my-service-db-conn
+secret2Name: my-service-cache-conn
+secret3Name: my-service-llm-keys
+```
 
-**Total Effort:** 5-7 days
+### Trade-offs
+
+| Aspect | Dynamic Array | Pre-Defined Slots |
+|--------|--------------|-------------------|
+| **Flexibility** | Unlimited secrets | Max 5 secrets |
+| **Requires Custom Function** | ✅ Yes | ❌ No |
+| **Memory Overhead** | ~50-100MB | 0 MB |
+| **Complexity** | High | Low |
+| **Covers agent-executor** | ✅ Yes | ✅ Yes |
+| **Maintains Zero-Touch** | ✅ Yes | ✅ Yes |
+| **Hybrid Secret Sources** | ✅ Yes | ✅ Yes |
+
+### Core Principles Preserved
+
+✅ **Hybrid Secret Approach** - Still accepts multiple secrets from different sources  
+✅ **Zero-Touch** - Still doesn't consolidate secrets  
+✅ **Crossplane-generated** - Still works with auto-generated secrets  
+✅ **ESO-synced** - Still works with ESO secrets  
+
+**The only change:** API syntax (`secretRefs[0]` → `secret1Name`) and limit (5 secrets max)
+
+### Implementation Details
+
+- **XRD:** Simple string fields (`secret1Name`, `secret2Name`, etc.)
+- **Composition:** Standard Crossplane patches only (no custom function)
+- **Mode:** `Resources` (not `Pipeline`)
+- **Secret mounting:** `envFrom` (bulk mounting) for all secrets
+
+**Total Effort:** 1 day (vs 5-7 days with custom function)
 
 ---
 

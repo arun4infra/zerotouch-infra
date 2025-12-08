@@ -1,0 +1,12 @@
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: EventDrivenService
+metadata:
+  name: simple-worker
+  namespace: workers
+spec:
+  # Minimal configuration - no secrets, no init container
+  image: ghcr.io/org/simple-worker:v1.0.0
+  size: small
+  nats:
+    stream: SIMPLE_JOBS
+    consumer: simple-workers

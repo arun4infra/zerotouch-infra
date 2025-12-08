@@ -1,0 +1,32 @@
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: EventDrivenService
+metadata:
+  name: agent-executor
+  namespace: intelligence-deepagents
+spec:
+  # Container image
+  image: ghcr.io/arun4infra/agent-executor:latest
+  
+  # Resource sizing
+  size: medium  # 500m-2000m CPU, 1Gi-4Gi memory
+  
+  # NATS configuration
+  nats:
+    url: nats://nats.nats.svc:4222
+    stream: AGENT_EXECUTION
+    consumer: agent-executor-workers
+  
+  # Secrets (envFrom - bulk mounting)
+  # All secret keys are mounted as environment variables
+  secret1Name: agent-executor-db-conn      # Crossplane-generated (PostgresInstance)
+  secret2Name: agent-executor-cache-conn   # Crossplane-generated (DragonflyInstance)
+  secret3Name: agent-executor-llm-keys     # ESO-synced from AWS SSM
+  
+  # Image pull secrets
+  imagePullSecrets:
+    - name: ghcr-pull-secret  # ESO-synced from AWS SSM
+  
+  # Init container for database migrations
+  initContainer:
+    command: ["/bin/bash", "-c"]
+    args: ["cd /app && ./scripts/ci/run-migrations.sh"]

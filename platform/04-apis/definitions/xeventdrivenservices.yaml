@@ -69,47 +69,48 @@ spec:
                       pattern: '^[a-z0-9-]+$'
                       example: "agent-executor-workers"
 
-                secretRefs:
-                  type: array
-                  description: "Array of secret references for environment variable injection (supports Crossplane-generated and ESO-synced secrets)"
-                  items:
-                    type: object
-                    required:
-                      - name
-                    properties:
-                      name:
-                        type: string
-                        description: "Name of the Kubernetes Secret to reference"
-                        minLength: 1
-                        maxLength: 253
-                        pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                # Pre-defined secret slots (envFrom only - bulk mounting)
+                # This approach avoids dynamic array iteration limitations in Crossplane
+                # Fully supports Hybrid Secret Sources (Crossplane + ESO) without consolidation
+                # All secret keys are mounted as environment variables using envFrom
+                
+                secret1Name:
+                  type: string
+                  description: "First secret name to mount via envFrom (typically database credentials)"
+                  minLength: 1
+                  maxLength: 253
+                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                  example: "my-service-db-conn"
 
-                      env:
-                        type: array
-                        description: "Array of individual secret key mappings to environment variables (for Crossplane secrets with specific key structure)"
-                        items:
-                          type: object
-                          required:
-                            - secretKey
-                            - envName
-                          properties:
-                            secretKey:
-                              type: string
-                              description: "Key name in the secret"
-                              minLength: 1
-                              example: "endpoint"
+                secret2Name:
+                  type: string
+                  description: "Second secret name to mount via envFrom (typically cache credentials)"
+                  minLength: 1
+                  maxLength: 253
+                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                  example: "my-service-cache-conn"
 
-                            envName:
-                              type: string
-                              description: "Environment variable name in the container"
-                              minLength: 1
-                              pattern: '^[A-Z_][A-Z0-9_]*$'
-                              example: "POSTGRES_HOST"
+                secret3Name:
+                  type: string
+                  description: "Third secret name to mount via envFrom (typically application secrets)"
+                  minLength: 1
+                  maxLength: 253
+                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                  example: "my-service-llm-keys"
 
-                      envFrom:
-                        type: boolean
-                        description: "If true, mount all secret keys as environment variables using envFrom (for ESO secrets)"
-                        default: false
+                secret4Name:
+                  type: string
+                  description: "Fourth secret name to mount via envFrom (optional)"
+                  minLength: 1
+                  maxLength: 253
+                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+
+                secret5Name:
+                  type: string
+                  description: "Fifth secret name to mount via envFrom (optional)"
+                  minLength: 1
+                  maxLength: 253
+                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
 
                 imagePullSecrets:
                   type: array

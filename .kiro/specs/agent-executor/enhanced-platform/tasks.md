@@ -2,6 +2,8 @@
 
 This implementation plan converts the EventDrivenService design into actionable coding tasks. Each task builds incrementally, with testing integrated throughout to validate correctness early.
 
+**Implementation Note (2025-12-08):** Tasks 3.1-3.10 were completed using a **simplified pre-defined secret slots approach** instead of the originally planned custom Crossplane function. This eliminates complexity and memory overhead while maintaining all core architectural principles.
+
 ---
 
 ## Task List
@@ -37,13 +39,13 @@ This implementation plan converts the EventDrivenService design into actionable 
 
 - [x] 3. Implement Crossplane Composition
   - Create file `platform/04-apis/compositions/event-driven-service-composition.yaml`
-  - Configure Composition to use Pipeline mode with 2-step pipeline:
-    - Step 1: patch-and-transform (base resources and static patches)
-    - Step 2: function-eventdrivenservice (dynamic secretRefs and initContainer)
+  - Configure Composition to use Resources mode (standard patches only, no custom function)
   - Set compositeTypeRef to XEventDrivenService
-  - **Implementation:** All subtasks 3.1-3.10 completed
-  - **Custom Function:** `platform/04-apis/functions/eventdrivenservice/main.go` (handles subtasks 3.5, 3.7)
-  - **Note:** Function must be built and deployed before composition works (see deployment guide)
+  - Add providerConfigRef to all Object resources (kubernetes-provider)
+  - **Implementation:** All subtasks 3.1-3.10 completed using pre-defined secret slots
+  - **Approach:** Pre-defined secret slots (`secret1Name`, `secret2Name`, etc.) instead of dynamic arrays
+  - **Secret Mounting:** envFrom (bulk mounting) for all secrets
+  - **No Custom Function:** Eliminates complexity and memory overhead
   - _Requirements: 2_
 
 - [x] 3.1 Implement ServiceAccount resource template
@@ -78,9 +80,9 @@ This implementation plan converts the EventDrivenService design into actionable 
   - _Requirements: 5_
 
 - [x] 3.5 Add hybrid secret mounting logic
-  - Implement secretKeyRef patches for individual key mappings (spec.secretRefs[].env)
-  - Implement envFrom patches for bulk secret mounting (spec.secretRefs[].envFrom)
-  - Handle empty secretRefs array (no secret mounts)
+  - Implement envFrom patches for pre-defined secret slots (spec.secret1Name through spec.secret5Name)
+  - Use conditional patches with `policy: {fromFieldPath: Optional}` to skip empty slots
+  - All secrets mounted via envFrom (bulk mounting - all keys become environment variables)
   - _Requirements: 6_
 
 - [x] 3.6 Add image pull secrets patches
@@ -89,12 +91,12 @@ This implementation plan converts the EventDrivenService design into actionable 
   - _Requirements: 7_
 
 - [x] 3.7 Add optional init container logic
-  - Create conditional init container patch
-  - Use same image as main container
+  - Create conditional init container patches
+  - Use same image as main container (patched from spec.image)
   - Patch command from spec.initContainer.command
   - Patch args from spec.initContainer.args
-  - Mount same environment variables from secretRefs as main container (both env and envFrom patterns)
-  - Only create if spec.initContainer is specified
+  - Init container inherits same envFrom secret mounts as main container
+  - Only created if spec.initContainer is specified (conditional patches)
   - _Requirements: 8_
 
 - [x] 3.8 Add health and readiness probes

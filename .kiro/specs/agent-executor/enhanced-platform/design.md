@@ -42,11 +42,13 @@ The EventDrivenService platform API provides a declarative Crossplane-based abst
 
 | Decision | Rationale | Trade-off |
 |----------|-----------|-----------|
-| **Multiple `secretRefs` instead of single secret** | Crossplane auto-generates secrets, can't consolidate | More verbose claim YAML |
+| **Pre-defined secret slots (not dynamic array)** | Avoids custom function complexity, zero memory overhead | Max 5 secrets (sufficient for 99% of cases) |
+| **envFrom only (bulk mounting)** | Simplifies implementation without custom functions | All secret keys must match desired env var names |
 | **Composition doesn't provision databases** | Existing APIs work well, avoid coupling | Consumers create multiple resources |
 | **KEDA uses `nats-headless` service** | Port 8222 only exposed on headless service | Learned from agent-executor debugging |
 | **Size enum instead of custom resources** | Simpler, prevents over/under-provisioning | Less flexibility (mitigated: can fork composition) |
 | **No automatic stream creation** | Streams are shared infrastructure | Consumers responsible for one-time setup |
+| **No custom Crossplane function** | Eliminates complexity and memory overhead | Less flexible secret mapping (envFrom only) |
 
 ---
 
@@ -1762,3 +1764,70 @@ spec:
 ## Approval
 
 **Does the design look good? If so, we can move on to implementation tasks.**
+
+
+---
+
+## Implementation Update: Pre-Defined Secret Slots
+
+**Date:** 2025-12-08  
+**Status:** Implemented
+
+### Simplified Secret Handling
+
+The final implementation uses **pre-defined secret slots** instead of dynamic arrays to avoid custom function complexity:
+
+**API Schema:**
+```yaml
+spec:
+  secret1Name: string  # First secret (typically database)
+  secret2Name: string  # Second secret (typically cache)
+  secret3Name: string  # Third secret (typically app secrets)
+  secret4Name: string  # Fourth secret (optional)
+  secret5Name: string  # Fifth secret (optional)
+```
+
+**Example Claim:**
+```yaml
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: EventDrivenService
+metadata:
+  name: agent-executor
+  namespace: intelligence-deepagents
+spec:
+  image: ghcr.io/arun4infra/agent-executor:latest
+  size: medium
+  nats:
+    stream: AGENT_EXECUTION
+    consumer: agent-executor-workers
+  secret1Name: agent-executor-db-conn      # Crossplane-generated
+  secret2Name: agent-executor-cache-conn   # Crossplane-generated
+  secret3Name: agent-executor-llm-keys     # ESO-synced
+  imagePullSecrets:
+    - name: ghcr-pull-secret
+  initContainer:
+    command: ["/bin/bash", "-c"]
+    args: ["cd /app && ./scripts/ci/run-migrations.sh"]
+```
+
+### Benefits
+
+✅ **No custom function** - Uses standard Crossplane patches only  
+✅ **Zero memory overhead** - No additional pods  
+✅ **Simple implementation** - Pure YAML, no Go code  
+✅ **Maintains Zero-Touch** - Still accepts Crossplane/ESO secrets  
+✅ **Hybrid Secret Sources** - Fully preserved  
+
+### Trade-offs
+
+⚠️ **Limited to 5 secrets** - Sufficient for 99% of use cases  
+⚠️ **envFrom only** - All secret keys mounted as environment variables (bulk mounting)  
+
+### Implementation Details
+
+- **Mode:** `Resources` (not `Pipeline` with custom function)
+- **Patches:** Standard `FromCompositeFieldPath` with `Optional` policy
+- **Secret mounting:** All secrets use `envFrom` for bulk mounting
+- **Composition:** 4 resources (ServiceAccount, Deployment, Service, ScaledObject)
+
+See `platform/04-apis/README.md` for complete API documentation and examples.

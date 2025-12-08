@@ -10,21 +10,16 @@ spec:
     apiVersion: platform.bizmatters.io/v1alpha1
     kind: XEventDrivenService
 
-  mode: Pipeline
-  pipeline:
-    - step: patch-and-transform
-      functionRef:
-        name: function-patch-and-transform
-      input:
-        apiVersion: pt.fn.crossplane.io/v1beta1
-        kind: Resources
-        resources:
+  # Use Resources mode with standard patches (no custom function needed)
+  resources:
           # Resource 1: ServiceAccount
           - name: serviceaccount
             base:
               apiVersion: kubernetes.crossplane.io/v1alpha2
               kind: Object
               spec:
+                providerConfigRef:
+                  name: kubernetes-provider
                 forProvider:
                   manifest:
                     apiVersion: v1
@@ -54,6 +49,8 @@ spec:
               apiVersion: kubernetes.crossplane.io/v1alpha2
               kind: Object
               spec:
+                providerConfigRef:
+                  name: kubernetes-provider
                 forProvider:
                   manifest:
                     apiVersion: apps/v1
@@ -97,6 +94,17 @@ spec:
                                   value: placeholder
                                 - name: NATS_CONSUMER_GROUP
                                   value: placeholder
+                              envFrom:
+                                - secretRef:
+                                    name: placeholder-secret1
+                                - secretRef:
+                                    name: placeholder-secret2
+                                - secretRef:
+                                    name: placeholder-secret3
+                                - secretRef:
+                                    name: placeholder-secret4
+                                - secretRef:
+                                    name: placeholder-secret5
                               resources:
                                 requests:
                                   cpu: "500m"
@@ -237,12 +245,45 @@ spec:
                 policy:
                   fromFieldPath: Optional
 
+              # Patch secret slots (envFrom - bulk mounting)
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.secret1Name
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[0].secretRef.name
+                policy:
+                  fromFieldPath: Optional
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.secret2Name
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[1].secretRef.name
+                policy:
+                  fromFieldPath: Optional
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.secret3Name
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[2].secretRef.name
+                policy:
+                  fromFieldPath: Optional
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.secret4Name
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[3].secretRef.name
+                policy:
+                  fromFieldPath: Optional
+
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.secret5Name
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[4].secretRef.name
+                policy:
+                  fromFieldPath: Optional
+
           # Resource 3: Service
           - name: service
             base:
               apiVersion: kubernetes.crossplane.io/v1alpha2
               kind: Object
               spec:
+                providerConfigRef:
+                  name: kubernetes-provider
                 forProvider:
                   manifest:
                     apiVersion: v1
@@ -285,6 +326,8 @@ spec:
               apiVersion: kubernetes.crossplane.io/v1alpha2
               kind: Object
               spec:
+                providerConfigRef:
+                  name: kubernetes-provider
                 forProvider:
                   manifest:
                     apiVersion: keda.sh/v1alpha1
@@ -318,7 +361,7 @@ spec:
                   - type: string
                     string:
                       type: Format
-                      format: "%s-scaler"
+                      fmt: "%s-scaler"
               - type: FromCompositeFieldPath
                 fromFieldPath: metadata.labels[crossplane.io/claim-namespace]
                 toFieldPath: spec.forProvider.manifest.metadata.namespace
@@ -339,10 +382,4 @@ spec:
                 fromFieldPath: spec.nats.consumer
                 toFieldPath: spec.forProvider.manifest.spec.triggers[0].metadata.consumer
 
-    # Step 2: Process secretRefs and initContainer with custom function
-    - step: build-secret-env
-      functionRef:
-        name: function-eventdrivenservice
-      input:
-        apiVersion: eventdrivenservice.fn.crossplane.io/v1beta1
-        kind: Input
+
