@@ -11,7 +11,7 @@ spec:
     path: bootstrap
     directory:
       recurse: false
-      include: '{00-*,10-*,20-*}.yaml'
+      include: '{00-*,10-*}.yaml'
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
