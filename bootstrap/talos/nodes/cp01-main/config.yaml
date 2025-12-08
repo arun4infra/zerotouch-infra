@@ -21,6 +21,10 @@ machine:
         image: ghcr.io/siderolabs/kubelet:v1.34.1 # The `image` field is an optional reference to an alternative kubelet image.
         defaultRuntimeSeccompProfileEnabled: true # Enable container runtime default Seccomp profile.
         disableManifestsDirectory: true # The `disableManifestsDirectory` field configures the kubelet to get static pod manifests from the /etc/kubernetes/manifests directory.
+        # Register control plane node with taint to prevent workload scheduling
+        registerWithTaints:
+            - key: node-role.kubernetes.io/control-plane
+              effect: NoSchedule
         
         # # The `ClusterDNS` field is an optional reference to an alternative kubelet clusterDNS ip list.
         # clusterDNS:
