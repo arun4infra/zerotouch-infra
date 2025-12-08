@@ -13,6 +13,7 @@ spec:
     path: platform/04-apis
     directory:
       recurse: true
+      exclude: '{schemas/*,tests/*,examples/*,*.md}'
   destination:
     server: https://kubernetes.default.svc
     # No namespace - XRDs and Compositions are cluster-scoped
