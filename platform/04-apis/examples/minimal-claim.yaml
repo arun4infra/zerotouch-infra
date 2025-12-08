@@ -9,7 +9,8 @@ metadata:
   namespace: workers
 spec:
   # Container image (public registry, no authentication required)
-  image: ghcr.io/org/simple-worker:v1.0.0
+  # Using nginx for testing - it has health endpoints and will stay running
+  image: nginx:alpine
   
   # Resource size (small allocation for lightweight workers)
   # small: 250m-1000m CPU, 512Mi-2Gi memory
