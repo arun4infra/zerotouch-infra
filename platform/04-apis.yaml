@@ -8,8 +8,8 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/arun4infra/bizmatters-infra.git
-    targetRevision: HEAD
+    repoURL: https://github.com/arun4infra/zerotouch-platform.git
+    targetRevision: main
     path: platform/04-apis
   destination:
     server: https://kubernetes.default.svc
@@ -18,3 +18,5 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - ServerSideApply=true

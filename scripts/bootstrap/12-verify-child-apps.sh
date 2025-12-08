@@ -49,7 +49,7 @@ echo ""
 echo -e "${BLUE}Verifying child Applications...${NC}"
 sleep 10
 
-EXPECTED_APPS=("crossplane-operator" "external-secrets" "keda" "kagent" "intelligence" "foundation-config" "databases")
+EXPECTED_APPS=("crossplane-operator" "external-secrets" "keda" "kagent" "apis" "intelligence" "foundation-config" "databases")
 MISSING_APPS=()
 
 for app in "${EXPECTED_APPS[@]}"; do

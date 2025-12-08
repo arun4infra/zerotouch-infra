@@ -6,7 +6,7 @@ This implementation plan converts the EventDrivenService design into actionable 
 
 ## Task List
 
-- [ ] 0. Verify platform prerequisites
+- [x] 0. Verify platform prerequisites
   - Check NATS is deployed and healthy in nats namespace
   - Verify JetStream is enabled on NATS
   - Check KEDA is installed and operational
@@ -14,20 +14,20 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Verify provider-kubernetes is configured
   - **Deliverable:** Platform foundation ready for EventDrivenService API
 
-- [ ] 1. Enable 04-apis layer in ArgoCD
+- [x] 1. Enable 04-apis layer in ArgoCD
   - Rename `platform/04-apis.yaml.disabled` to `platform/04-apis.yaml`
   - Configure ArgoCD Application with sync-wave "1"
   - Set automated sync with `prune: true` and `selfHeal: true`
   - Create `platform/04-apis/README.md` with layer overview
   - _Requirements: 14_
 
-- [ ] 1.1 Update bootstrap verification script for 04-apis layer
+- [x] 1.1 Update bootstrap verification script for 04-apis layer
   - Update `scripts/bootstrap/12-verify-child-apps.sh`
-  - Add `platform-apis` to EXPECTED_APPS array
+  - Add `apis` to EXPECTED_APPS array
   - Verify script correctly detects the new Application
   - _Requirements: 14_
 
-- [ ] 2. Create XRD definition for EventDrivenService
+- [x] 2. Create XRD definition for EventDrivenService
   - Create file `platform/04-apis/definitions/xeventdrivenservices.yaml`
   - Define XRD with API group `platform.bizmatters.io` version `v1alpha1`
   - Set composite kind `XEventDrivenService` and claim kind `EventDrivenService`
@@ -42,13 +42,13 @@ This implementation plan converts the EventDrivenService design into actionable 
   - **Must complete subtasks 3.1-3.10 before marking this task complete**
   - _Requirements: 2_
 
-- [ ] 3.1 Implement ServiceAccount resource template
+- [x] 3.1 Implement ServiceAccount resource template
   - Create ServiceAccount resource in Composition
   - Patch name from claim metadata
   - Apply standard labels
   - _Requirements: 13, 15_
 
-- [ ] 3.2 Implement Deployment resource template
+- [x] 3.2 Implement Deployment resource template
   - Create Deployment base manifest with replicas: 1
   - Configure pod template with security context (runAsNonRoot, runAsUser: 1000)
   - Set container security context (allowPrivilegeEscalation: false, drop ALL capabilities)
@@ -59,7 +59,7 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Apply standard labels
   - _Requirements: 3, 9, 15, 19_
 
-- [ ] 3.3 Add resource sizing patches to Deployment
+- [x] 3.3 Add resource sizing patches to Deployment
   - Create size-to-resources transform patches
   - Map small: 250m-1000m CPU, 512Mi-2Gi memory
   - Map medium: 500m-2000m CPU, 1Gi-4Gi memory
@@ -67,24 +67,24 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Set default to medium when size not specified
   - _Requirements: 4_
 
-- [ ] 3.4 Add NATS environment variable patches
+- [x] 3.4 Add NATS environment variable patches
   - Patch NATS_URL from spec.nats.url (default: nats://nats.nats.svc:4222)
   - Patch NATS_STREAM_NAME from spec.nats.stream
   - Patch NATS_CONSUMER_GROUP from spec.nats.consumer
   - _Requirements: 5_
 
-- [ ] 3.5 Add hybrid secret mounting logic
+- [x] 3.5 Add hybrid secret mounting logic
   - Implement secretKeyRef patches for individual key mappings (spec.secretRefs[].env)
   - Implement envFrom patches for bulk secret mounting (spec.secretRefs[].envFrom)
   - Handle empty secretRefs array (no secret mounts)
   - _Requirements: 6_
 
-- [ ] 3.6 Add image pull secrets patches
+- [x] 3.6 Add image pull secrets patches
   - Patch imagePullSecrets array from spec.imagePullSecrets
   - Handle empty array (use default service account credentials)
   - _Requirements: 7_
 
-- [ ] 3.7 Add optional init container logic
+- [x] 3.7 Add optional init container logic
   - Create conditional init container patch
   - Use same image as main container
   - Patch command from spec.initContainer.command
@@ -93,14 +93,14 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Only create if spec.initContainer is specified
   - _Requirements: 8_
 
-- [ ] 3.8 Add health and readiness probes
+- [x] 3.8 Add health and readiness probes
   - Configure liveness probe: HTTP GET /health:8080
   - Set liveness timing: initialDelaySeconds: 10, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3
   - Configure readiness probe: HTTP GET /ready:8080
   - Set readiness timing: initialDelaySeconds: 5, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 2
   - _Requirements: 11_
 
-- [ ] 3.9 Implement Service resource template
+- [x] 3.9 Implement Service resource template
   - Create Service with type ClusterIP
   - Expose port 8080 targeting container port 8080
   - Patch name from claim metadata
@@ -108,7 +108,7 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Apply standard labels
   - _Requirements: 10, 15_
 
-- [ ] 3.10 Implement KEDA ScaledObject resource template
+- [x] 3.10 Implement KEDA ScaledObject resource template
   - Create ScaledObject base manifest
   - Set scaleTargetRef to Deployment name
   - Configure minReplicaCount: 1, maxReplicaCount: 10
