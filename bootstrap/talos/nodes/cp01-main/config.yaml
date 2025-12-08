@@ -21,10 +21,6 @@ machine:
         image: ghcr.io/siderolabs/kubelet:v1.34.2 # The `image` field is an optional reference to an alternative kubelet image.
         defaultRuntimeSeccompProfileEnabled: true # Enable container runtime default Seccomp profile.
         disableManifestsDirectory: true # The `disableManifestsDirectory` field configures the kubelet to get static pod manifests from the /etc/kubernetes/manifests directory.
-        # Register control plane node with taint to prevent workload scheduling
-        registerWithTaints:
-            - key: node-role.kubernetes.io/control-plane
-              effect: NoSchedule
         
         # # The `ClusterDNS` field is an optional reference to an alternative kubelet clusterDNS ip list.
         # clusterDNS:
@@ -510,7 +506,7 @@ cluster:
         # # The `advertisedSubnets` field configures the networks to pick etcd advertised IP from.
         # advertisedSubnets:
         #     - 10.0.0.0/8
-    allowSchedulingOnControlPlanes: true # Allows running workload on control-plane nodes.
+    allowSchedulingOnControlPlanes: false # Prevents running workload on control-plane nodes.
     # Cilium CNI for bootstrap - minimal config
     # ArgoCD will adopt and enable full features (Hubble, Gateway API)
     inlineManifests:
