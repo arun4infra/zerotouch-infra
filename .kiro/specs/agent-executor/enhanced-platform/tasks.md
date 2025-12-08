@@ -21,6 +21,12 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Create `platform/04-apis/README.md` with layer overview
   - _Requirements: 14_
 
+- [ ] 1.1 Update bootstrap verification script for 04-apis layer
+  - Update `scripts/bootstrap/12-verify-child-apps.sh`
+  - Add `platform-apis` to EXPECTED_APPS array
+  - Verify script correctly detects the new Application
+  - _Requirements: 14_
+
 - [ ] 2. Create XRD definition for EventDrivenService
   - Create file `platform/04-apis/definitions/xeventdrivenservices.yaml`
   - Define XRD with API group `platform.bizmatters.io` version `v1alpha1`
@@ -161,6 +167,13 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Include resolution steps for each error type
   - _Requirements: 20_
 
+- [ ] 7.2 Update bootstrap sequence documentation
+  - Update `scripts/bootstrap/BOOTSTRAP-SEQUENCE.md`
+  - Document the 04-apis layer in platform layers section
+  - Explain EventDrivenService API purpose and sync-wave ordering
+  - Add to platform architecture overview
+  - _Requirements: 14, 16_
+
 - [ ] 8. Create schema validation test suite
   - Create file `platform/04-apis/tests/schema-validation.test.sh`
   - Create test fixtures directory `platform/04-apis/tests/fixtures/`
@@ -193,6 +206,15 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Verify all 4 resource templates present (ServiceAccount, Deployment, Service, ScaledObject)
   - Verify Composition uses correct function (patch-and-transform)
   - **Deliverable:** Composition deployed and structurally validated
+
+- [ ] 11.1 Create EventDrivenService API verification script
+  - Create file `scripts/bootstrap/15-verify-eventdrivenservice-api.sh`
+  - Verify platform-apis Application exists and is synced
+  - Verify EventDrivenService XRD (CRD) is installed
+  - Verify event-driven-service Composition exists
+  - Verify schema file published at platform/04-apis/schemas/
+  - Make script executable
+  - _Requirements: 14, 17, 21_
 
 - [ ] 12. Create minimal claim deployment test
   - Create test script `platform/04-apis/tests/test-minimal-deployment.sh`
@@ -268,6 +290,15 @@ This implementation plan converts the EventDrivenService design into actionable 
   - Compare field-by-field with current manifests
   - **Note:** Actual migration of agent-executor (replacing direct manifests in bizmatters repo) is deferred until 2nd NATS service deployment (per ARCHITECTURE_DECISION.md)
   - **Deliverable:** Migration path validated and proven, ready when needed
+
+- [ ] 19.1 Update agent-executor verification script (deferred)
+  - Update `scripts/bootstrap/14-verify-agent-executor.sh`
+  - Add EventDrivenService claim verification section
+  - Verify claim exists and is Ready
+  - Verify composed resources (4 expected: Deployment, Service, ScaledObject, ServiceAccount)
+  - Make verification conditional (supports both direct manifests and EventDrivenService API)
+  - **Note:** Only implement when agent-executor actually migrates to EventDrivenService API
+  - _Requirements: 17, 18_
 
 - [ ] 20. Create functional test script
   - Create test script `platform/04-apis/tests/test-functional.sh`
