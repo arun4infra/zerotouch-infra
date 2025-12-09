@@ -7,7 +7,13 @@ This directory contains the test suite for validating EventDrivenService claims 
 ```
 tests/
 ├── README.md                          # This file
-├── schema-validation.test.sh          # Main test suite script
+├── schema-validation.test.sh          # Schema validation test suite
+├── test-autoscaling.sh                # Cold-start autoscaling test
+├── test-autoscaling-production.sh     # Production simulation autoscaling test
+├── test-full-deployment.sh            # Full deployment test
+├── test-minimal-deployment.sh         # Minimal deployment test
+├── verify-composition.sh              # Composition verification
+├── verify-keda-config.sh              # KEDA configuration verification
 └── fixtures/                          # Test claim fixtures
     ├── valid-minimal.yaml             # Valid minimal claim
     ├── valid-full.yaml                # Valid full-featured claim
@@ -17,11 +23,43 @@ tests/
 
 ## Running Tests
 
-### Run All Tests
+### Schema Validation Tests
 
 ```bash
 # From project root
 ./platform/04-apis/tests/schema-validation.test.sh
+```
+
+### Autoscaling Tests
+
+```bash
+# Cold-start test (demonstrates KEDA limitation with non-consuming workers)
+./platform/04-apis/tests/test-autoscaling.sh
+
+# Production simulation (demonstrates KEDA works with active consumers)
+./platform/04-apis/tests/test-autoscaling-production.sh
+```
+
+**Note**: The cold-start test is expected to fail Check 2 due to a known KEDA limitation. See `../docs/KEDA-NATS-LIMITATIONS.md` for details. The production simulation test should pass all checks.
+
+### Deployment Tests
+
+```bash
+# Test minimal deployment
+./platform/04-apis/tests/test-minimal-deployment.sh
+
+# Test full deployment with all features
+./platform/04-apis/tests/test-full-deployment.sh
+```
+
+### Verification Tests
+
+```bash
+# Verify composition structure
+./platform/04-apis/tests/verify-composition.sh
+
+# Verify KEDA configuration
+./platform/04-apis/tests/verify-keda-config.sh
 ```
 
 ### Prerequisites
@@ -36,7 +74,23 @@ If the schema is not published, run:
 ./scripts/publish-schema.sh
 ```
 
-## Test Cases
+## Autoscaling Tests
+
+### Cold-Start Test (`test-autoscaling.sh`)
+**Purpose:** Demonstrates KEDA NATS JetStream scaler limitation in cold-start scenarios  
+**Worker:** nginx (does not pull messages)  
+**Expected:** Check 2 fails - pods don't scale up because `num_pending` = 0  
+**Why:** KEDA uses `num_pending` (messages being pulled) not `unprocessed` (messages in stream)
+
+### Production Simulation Test (`test-autoscaling-production.sh`)
+**Purpose:** Validates KEDA autoscaling works correctly with active message consumers  
+**Worker:** nats-box (actively pulls messages)  
+**Expected:** All checks pass - pods scale up because `num_pending` > 0  
+**Why:** Worker pulls messages, incrementing `num_pending`, triggering KEDA scale-up
+
+**Key Insight**: The cold-start test failure is expected and documents a known KEDA limitation. The production test confirms autoscaling works correctly in real-world scenarios. See `../docs/KEDA-NATS-LIMITATIONS.md` for detailed analysis.
+
+## Schema Validation Test Cases
 
 ### Test 1: Valid Minimal Claim
 **Purpose:** Validates a minimal claim with only required fields  
