@@ -339,11 +339,11 @@ spec:
                         - type: nats-jetstream
                           metadata:
                             natsServerMonitoringEndpoint: "nats-headless.nats.svc.cluster.local:8222"
-                            account: "$SYS"
+                            account: "$G"
                             stream: placeholder
                             consumer: placeholder
                             lagThreshold: "5"
-                            useStreamMsgCount: "true"
+                            activationLagThreshold: "0"
             patches:
               # Patch name (with -scaler suffix)
               - type: FromCompositeFieldPath
