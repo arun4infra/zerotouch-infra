@@ -25,12 +25,12 @@ NC='\033[0m' # No Color
 
 # Script directory and project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 
 # Test configuration
 TEST_NAMESPACE="test-autoscale-$(date +%s)"
 CLAIM_NAME="autoscale-worker"
-CLAIM_FILE="${PROJECT_ROOT}/platform/04-apis/examples/minimal-claim.yaml"
+CLAIM_FILE="${PROJECT_ROOT}/platform/04-apis/event-driven-service/examples/minimal-claim.yaml"
 MESSAGE_COUNT=50
 NATS_STREAM="SIMPLE_JOBS"
 NATS_CONSUMER="simple-workers"
