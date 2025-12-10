@@ -115,11 +115,11 @@ fi
 
 if [ "$MODE" = "production" ]; then
     # Step 1: Embed Cilium in Talos config
-    echo -e "${YELLOW}[1/13] Embedding Cilium CNI...${NC}"
+    echo -e "${YELLOW}[1/14] Embedding Cilium CNI...${NC}"
     "$SCRIPT_DIR/02-embed-cilium.sh"
 
     # Step 2: Install Talos OS
-    echo -e "${YELLOW}[2/13] Installing Talos OS...${NC}"
+    echo -e "${YELLOW}[2/14] Installing Talos OS...${NC}"
     "$SCRIPT_DIR/03-install-talos.sh" --server-ip "$SERVER_IP" --user root --password "$ROOT_PASSWORD" --yes
 
     "$SCRIPT_DIR/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "TALOS CREDENTIALS" "Talos Config: bootstrap/talos/talosconfig
@@ -129,30 +129,30 @@ Access Talos:
   talosctl --talosconfig bootstrap/talos/talosconfig -n $SERVER_IP version"
 
     # Step 3: Bootstrap Talos cluster
-    echo -e "${YELLOW}[3/13] Bootstrapping Talos cluster...${NC}"
+    echo -e "${YELLOW}[3/14] Bootstrapping Talos cluster...${NC}"
     "$SCRIPT_DIR/04-bootstrap-talos.sh" "$SERVER_IP"
 
     # Step 4: Add Worker Nodes (if specified)
     if [ -n "$WORKER_NODES" ]; then
-        echo -e "${YELLOW}[4/13] Adding worker nodes...${NC}"
+        echo -e "${YELLOW}[4/14] Adding worker nodes...${NC}"
         "$SCRIPT_DIR/05-add-worker-nodes.sh" "$WORKER_NODES" "$WORKER_PASSWORD"
     else
-        echo -e "${BLUE}[4/13] No worker nodes specified - single node cluster${NC}"
+        echo -e "${BLUE}[4/14] No worker nodes specified - single node cluster${NC}"
     fi
 
     # Step 5: Wait for Cilium CNI
-    echo -e "${YELLOW}[5/13] Waiting for Cilium CNI...${NC}"
+    echo -e "${YELLOW}[5/14] Waiting for Cilium CNI...${NC}"
     "$SCRIPT_DIR/06-wait-cilium.sh"
 else
-    echo -e "${BLUE}[1-5/13] Skipping Talos installation (preview mode uses Kind)${NC}"
+    echo -e "${BLUE}[1-5/14] Skipping Talos installation (preview mode uses Kind)${NC}"
 fi
 
 # Step 6: Inject ESO Secrets
-echo -e "${YELLOW}[6/13] Injecting ESO secrets...${NC}"
+echo -e "${YELLOW}[6/14] Injecting ESO secrets...${NC}"
 "$SCRIPT_DIR/07-inject-eso-secrets.sh"
 
 # Step 7: Inject SSM Parameters (BEFORE ArgoCD)
-echo -e "${YELLOW}[7/13] Injecting SSM parameters...${NC}"
+echo -e "${YELLOW}[7/14] Injecting SSM parameters...${NC}"
 "$SCRIPT_DIR/08-inject-ssm-parameters.sh"
 
 if [ "$MODE" = "production" ]; then
@@ -163,20 +163,24 @@ Verify parameters:
 fi
 
 # Step 8: Install ArgoCD
-echo -e "${YELLOW}[8/13] Installing ArgoCD...${NC}"
+echo -e "${YELLOW}[8/14] Installing ArgoCD...${NC}"
 "$SCRIPT_DIR/09-install-argocd.sh"
 
 # Step 9: Wait for platform-bootstrap
-echo -e "${YELLOW}[9/13] Waiting for platform-bootstrap...${NC}"
+echo -e "${YELLOW}[9/14] Waiting for platform-bootstrap...${NC}"
 "$SCRIPT_DIR/10-wait-platform-bootstrap.sh"
 
 # Step 10: Verify ESO
-echo -e "${YELLOW}[10/13] Verifying ESO...${NC}"
+echo -e "${YELLOW}[10/14] Verifying ESO...${NC}"
 "$SCRIPT_DIR/11-verify-eso.sh"
 
 # Step 11: Verify child applications
-echo -e "${YELLOW}[11/13] Verifying child applications...${NC}"
+echo -e "${YELLOW}[11/14] Verifying child applications...${NC}"
 "$SCRIPT_DIR/12-verify-child-apps.sh"
+
+# Step 12: Wait for all apps to be healthy
+echo -e "${YELLOW}[12/14] Waiting for all applications to be healthy...${NC}"
+"$SCRIPT_DIR/12a-wait-apps-healthy.sh" --timeout 600
 
 # Extract ArgoCD password
 ARGOCD_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>/dev/null | base64 -d || echo "NOT_GENERATED")
@@ -200,8 +204,8 @@ else
 fi
 
 if [ "$MODE" = "production" ]; then
-    # Step 12: Configure repository credentials
-    echo -e "${YELLOW}[12/13] Configuring repository credentials...${NC}"
+    # Step 13: Configure repository credentials
+    echo -e "${YELLOW}[13/14] Configuring repository credentials...${NC}"
     "$SCRIPT_DIR/13-configure-repo-credentials.sh" --auto || {
         echo -e "${YELLOW}⚠️  Repository credentials configuration had issues${NC}"
         echo -e "${BLUE}ℹ  You can configure manually: ./scripts/bootstrap/13-configure-repo-credentials.sh --auto${NC}"
@@ -213,11 +217,11 @@ Verify:
   kubectl get secret -n argocd -l argocd.argoproj.io/secret-type=repository
   kubectl get externalsecret -n argocd"
 else
-    echo -e "${BLUE}[12/13] Skipping repository credentials configuration (preview mode)${NC}"
+    echo -e "${BLUE}[13/14] Skipping repository credentials configuration (preview mode)${NC}"
 fi
 
-# Step 13: Final cluster validation
-echo -e "${YELLOW}[13/13] Running final cluster validation...${NC}"
+# Step 14: Final cluster validation
+echo -e "${YELLOW}[14/14] Running final cluster validation...${NC}"
 "$SCRIPT_DIR/99-validate-cluster.sh" || {
     echo -e "${YELLOW}⚠️  Cluster validation found issues${NC}"
     echo -e "${BLUE}ℹ  Check ArgoCD applications: kubectl get applications -n argocd${NC}"
