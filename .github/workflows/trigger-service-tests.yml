@@ -1,0 +1,52 @@
+name: Trigger Service Integration Tests
+
+on:
+  push:
+    branches: [main, feature/agent-executor]
+    paths:
+      - 'scripts/bootstrap/**'
+      - 'platform/**'
+      - 'bootstrap/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/bootstrap/**'
+      - 'platform/**'
+      - 'bootstrap/**'
+
+permissions:
+  contents: read
+
+jobs:
+  trigger-tests:
+    name: Trigger Service Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'  # Only trigger on push, not PR
+    
+    steps:
+      - name: Trigger deepagents-runtime tests
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const branch = context.ref.replace('refs/heads/', '');
+            
+            console.log(`Triggering deepagents-runtime tests for platform branch: ${branch}`);
+            
+            try {
+              await github.rest.repos.createDispatchEvent({
+                owner: context.repo.owner,
+                repo: 'deepagents-runtime',
+                event_type: 'platform-updated',
+                client_payload: {
+                  branch: branch,
+                  commit: context.sha,
+                  repository: context.repo.full_name
+                }
+              });
+              
+              console.log('✓ Successfully triggered deepagents-runtime integration tests');
+            } catch (error) {
+              console.error('Failed to trigger tests:', error.message);
+              core.setFailed(`Failed to trigger deepagents-runtime tests: ${error.message}`);
+            }
