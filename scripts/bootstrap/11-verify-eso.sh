@@ -1,11 +1,12 @@
 #!/bin/bash
-# Verify External Secrets Operator (ESO)
-# Usage: ./08-verify-eso.sh
+# Verify External Secrets Operator (ESO) and Force Re-sync
+# Usage: ./11-verify-eso.sh
 #
-# This script verifies:
-# 1. ESO credentials exist
-# 2. ClusterSecretStore is valid
-# 3. ESO can access AWS SSM
+# This script:
+# 1. Verifies ESO credentials exist
+# 2. Verifies ClusterSecretStore is valid
+# 3. Forces re-sync of all ExternalSecrets (to handle timing issues)
+# 4. Waits and verifies all ExternalSecrets are SecretSynced
 
 set -e
 
@@ -15,6 +16,10 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
+
+# Configuration
+MAX_WAIT=180  # 3 minutes max wait for secrets to sync
+CHECK_INTERVAL=10
 
 # Kubectl retry function
 kubectl_retry() {
@@ -27,18 +32,14 @@ kubectl_retry() {
         if timeout $timeout kubectl "$@"; then
             return 0
         fi
-
         exitCode=$?
-
         if [ $attempt -lt $max_attempts ]; then
             local delay=$((attempt * 2))
             echo -e "${YELLOW}⚠️  kubectl command failed (attempt $attempt/$max_attempts). Retrying in ${delay}s...${NC}" >&2
             sleep $delay
         fi
-
         attempt=$((attempt + 1))
     done
-
     echo -e "${RED}✗ kubectl command failed after $max_attempts attempts${NC}" >&2
     return $exitCode
 }
@@ -48,35 +49,114 @@ echo -e "${BLUE}║   Verifying External Secrets Operator                       
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-# Check if ESO credentials exist
-if kubectl_retry get secret aws-access-token -n external-secrets &>/dev/null; then
-    echo -e "${GREEN}✓ ESO credentials found${NC}"
+# Step 1: Check ESO credentials
+echo -e "${BLUE}Step 1: Checking ESO credentials...${NC}"
+if ! kubectl_retry get secret aws-access-token -n external-secrets &>/dev/null; then
+    echo -e "${RED}✗ AWS credentials not found in external-secrets namespace${NC}"
+    echo -e "${BLUE}ℹ  Run: ./scripts/bootstrap/07-inject-eso-secrets.sh${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ ESO credentials found${NC}"
+echo ""
+
+# Step 2: Wait for ClusterSecretStore to be valid
+echo -e "${BLUE}Step 2: Waiting for ClusterSecretStore to be valid...${NC}"
+ELAPSED=0
+while [ $ELAPSED -lt 120 ]; do
+    STORE_STATUS=$(kubectl_retry get clustersecretstore aws-parameter-store -o jsonpath='{.status.conditions[0].status}' 2>/dev/null || echo "Unknown")
+    STORE_REASON=$(kubectl_retry get clustersecretstore aws-parameter-store -o jsonpath='{.status.conditions[0].reason}' 2>/dev/null || echo "Unknown")
     
-    # Wait for ClusterSecretStore to be valid
-    echo -e "${BLUE}⏳ Waiting for ESO to sync secrets (timeout: 2 minutes)...${NC}"
-    TIMEOUT=120
-    ELAPSED=0
-    while [ $ELAPSED -lt $TIMEOUT ]; do
-        STORE_STATUS=$(kubectl_retry get clustersecretstore aws-parameter-store -o jsonpath='{.status.conditions[0].status}' 2>/dev/null || echo "Unknown")
-        
-        if [ "$STORE_STATUS" = "True" ]; then
-            echo -e "${GREEN}✓ ESO credentials configured and working${NC}"
-            echo -e "${GREEN}✓ ClusterSecretStore 'aws-parameter-store' is valid${NC}"
-            echo ""
-            exit 0
-        fi
-        
-        sleep 10
-        ELAPSED=$((ELAPSED + 10))
-    done
+    if [ "$STORE_STATUS" = "True" ]; then
+        echo -e "${GREEN}✓ ClusterSecretStore 'aws-parameter-store' is valid${NC}"
+        break
+    fi
     
-    echo -e "${YELLOW}⚠️  ESO not ready yet - secrets may sync later${NC}"
-    echo -e "${BLUE}ℹ  You can verify manually: kubectl get clustersecretstore aws-parameter-store${NC}"
-    echo ""
-    exit 0
-else
-    echo -e "${YELLOW}⚠️  AWS credentials not found - ESO won't be able to sync secrets${NC}"
-    echo -e "${BLUE}ℹ  You can inject manually: ./scripts/bootstrap/07-inject-eso-secrets.sh${NC}"
-    echo ""
+    echo -e "${YELLOW}  Waiting... Status: $STORE_REASON${NC}"
+    sleep 10
+    ELAPSED=$((ELAPSED + 10))
+done
+
+if [ "$STORE_STATUS" != "True" ]; then
+    echo -e "${RED}✗ ClusterSecretStore not ready after 2 minutes${NC}"
+    kubectl_retry get clustersecretstore aws-parameter-store -o yaml
+    exit 1
+fi
+echo ""
+
+# Step 3: Force re-sync all ExternalSecrets
+echo -e "${BLUE}Step 3: Force re-syncing all ExternalSecrets...${NC}"
+EXTERNAL_SECRETS=$(kubectl get externalsecrets -A -o json 2>/dev/null)
+TOTAL=$(echo "$EXTERNAL_SECRETS" | jq -r '.items | length')
+
+if [ "$TOTAL" -eq 0 ]; then
+    echo -e "${YELLOW}⚠️  No ExternalSecrets found - skipping${NC}"
     exit 0
 fi
+
+echo -e "${BLUE}   Found $TOTAL ExternalSecrets${NC}"
+
+# Annotate each to trigger re-sync
+SYNC_TIMESTAMP=$(date +%s)
+while IFS='|' read -r namespace name; do
+    if kubectl annotate externalsecret "$name" -n "$namespace" \
+        force-sync="$SYNC_TIMESTAMP" --overwrite 2>/dev/null; then
+        echo -e "   ${GREEN}✓${NC} Triggered: $namespace/$name"
+    else
+        echo -e "   ${YELLOW}⚠️${NC} Failed to trigger: $namespace/$name"
+    fi
+done < <(echo "$EXTERNAL_SECRETS" | jq -r '.items[] | "\(.metadata.namespace)|\(.metadata.name)"')
+echo ""
+
+# Step 4: Wait and verify all ExternalSecrets are synced
+echo -e "${BLUE}Step 4: Waiting for ExternalSecrets to sync (max ${MAX_WAIT}s)...${NC}"
+ELAPSED=0
+while [ $ELAPSED -lt $MAX_WAIT ]; do
+    sleep $CHECK_INTERVAL
+    ELAPSED=$((ELAPSED + CHECK_INTERVAL))
+    
+    # Get current status of all ExternalSecrets
+    SECRETS_JSON=$(kubectl get externalsecrets -A -o json 2>/dev/null)
+    
+    TOTAL=$(echo "$SECRETS_JSON" | jq -r '.items | length')
+    SYNCED=$(echo "$SECRETS_JSON" | jq -r '[.items[] | select(.status.conditions[0].reason == "SecretSynced")] | length')
+    FAILED=$(echo "$SECRETS_JSON" | jq -r '[.items[] | select(.status.conditions[0].reason == "SecretSyncedError")] | length')
+    PENDING=$((TOTAL - SYNCED - FAILED))
+    
+    echo -e "   [${ELAPSED}s] Total: $TOTAL | ${GREEN}Synced: $SYNCED${NC} | ${RED}Failed: $FAILED${NC} | Pending: $PENDING"
+    
+    # All synced successfully
+    if [ "$SYNCED" -eq "$TOTAL" ]; then
+        echo ""
+        echo -e "${GREEN}✓ All $TOTAL ExternalSecrets synced successfully!${NC}"
+        echo ""
+        kubectl get externalsecrets -A -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.conditions[0].reason,READY:.status.conditions[0].status'
+        echo ""
+        exit 0
+    fi
+    
+    # Some failed - show details
+    if [ "$FAILED" -gt 0 ] && [ "$PENDING" -eq 0 ]; then
+        echo ""
+        echo -e "${RED}✗ $FAILED ExternalSecrets failed to sync:${NC}"
+        echo "$SECRETS_JSON" | jq -r '.items[] | select(.status.conditions[0].reason == "SecretSyncedError") | "  - \(.metadata.namespace)/\(.metadata.name): \(.status.conditions[0].message)"'
+        echo ""
+        # Don't exit yet - give more time for retry
+    fi
+done
+
+# Final status check
+echo ""
+echo -e "${YELLOW}⚠️  Timeout reached. Current ExternalSecret status:${NC}"
+kubectl get externalsecrets -A -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.conditions[0].reason,MESSAGE:.status.conditions[0].message'
+echo ""
+
+# Check if any critical secrets failed
+FAILED_COUNT=$(kubectl get externalsecrets -A -o json | jq -r '[.items[] | select(.status.conditions[0].reason == "SecretSyncedError")] | length')
+if [ "$FAILED_COUNT" -gt 0 ]; then
+    echo -e "${RED}✗ $FAILED_COUNT ExternalSecrets still failing${NC}"
+    echo -e "${BLUE}ℹ  Check SSM parameters exist: aws ssm get-parameters-by-path --path /zerotouch/shared${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}✓ ESO verification complete${NC}"
+exit 0
