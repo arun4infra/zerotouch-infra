@@ -170,17 +170,13 @@ echo -e "${YELLOW}[8/13] Installing ArgoCD...${NC}"
 echo -e "${YELLOW}[9/13] Waiting for platform-bootstrap...${NC}"
 "$SCRIPT_DIR/10-wait-platform-bootstrap.sh"
 
-if [ "$MODE" = "production" ]; then
-    # Step 10: Verify ESO
-    echo -e "${YELLOW}[10/13] Verifying ESO...${NC}"
-    "$SCRIPT_DIR/11-verify-eso.sh"
+# Step 10: Verify ESO
+echo -e "${YELLOW}[10/13] Verifying ESO...${NC}"
+"$SCRIPT_DIR/11-verify-eso.sh"
 
-    # Step 11: Verify child applications
-    echo -e "${YELLOW}[11/13] Verifying child applications...${NC}"
-    "$SCRIPT_DIR/12-verify-child-apps.sh"
-else
-    echo -e "${BLUE}[10-11/13] Skipping ESO and child app verification (preview mode)${NC}"
-fi
+# Step 11: Verify child applications
+echo -e "${YELLOW}[11/13] Verifying child applications...${NC}"
+"$SCRIPT_DIR/12-verify-child-apps.sh"
 
 # Extract ArgoCD password
 ARGOCD_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>/dev/null | base64 -d || echo "NOT_GENERATED")

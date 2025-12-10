@@ -78,13 +78,16 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
         key=$(echo "$key" | xargs)  # Trim whitespace
         
         # Convert SSM path to environment variable name
-        # /zerotouch/prod/agent-executor/openai_api_key -> OPENAI_API_KEY
-        env_var=$(echo "$key" | sed 's|^/zerotouch/prod/[^/]*/||' | tr '[:lower:]' '[:upper:]' | tr '/' '_' | tr '-' '_')
+        # /zerotouch/prod/openai_api_key -> OPENAI_API_KEY
+        # Extract the last part of the path as the base env var name
+        env_var=$(basename "$key" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
         
         # Special mappings for common variables
         case "$key" in
-            */openai_api_key) env_var="OPENAI_API_KEY" ;;
-            */anthropic_api_key) env_var="ANTHROPIC_API_KEY" ;;
+            # Global LLM keys
+            /zerotouch/prod/openai_api_key) env_var="OPENAI_API_KEY" ;;
+            /zerotouch/prod/anthropic_api_key) env_var="ANTHROPIC_API_KEY" ;;
+            # GitHub credentials
             */github/username) env_var="PAT_GITHUB_USER" ;;
             */github/token|*/github/password) env_var="PAT_GITHUB" ;;
             */ghcr/username) env_var="PAT_GITHUB_USER" ;;
