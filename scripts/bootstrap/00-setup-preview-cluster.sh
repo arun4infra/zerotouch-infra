@@ -93,6 +93,20 @@ kubectl label nodes --all workload.bizmatters.dev/databases=true --overwrite
 echo -e "${GREEN}✓ Nodes labeled${NC}"
 
 echo ""
+
+# Exclude tenant components in preview mode
+# Tenants require SSM credentials that services don't have
+echo -e "${BLUE}Excluding tenant components for preview mode...${NC}"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Change root.yaml to exclude 11-platform-tenants.yaml
+if [ -f "$REPO_ROOT/bootstrap/root.yaml" ]; then
+    sed -i.bak "s|include: '{00-\*,10-\*,11-\*}.yaml'|include: '{00-*,10-*}.yaml'|" "$REPO_ROOT/bootstrap/root.yaml"
+    rm -f "$REPO_ROOT/bootstrap/root.yaml.bak"
+    echo -e "${GREEN}✓ Tenant components excluded from bootstrap${NC}"
+fi
+
+echo ""
 echo -e "${GREEN}✓ Preview cluster setup complete${NC}"
 echo -e "  Cluster: ${BLUE}kind-${CLUSTER_NAME}${NC}"
 echo -e "  Context: ${BLUE}kind-${CLUSTER_NAME}${NC}"

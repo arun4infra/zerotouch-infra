@@ -1,6 +1,6 @@
 #!/bin/bash
 # Bootstrap script to inject secrets into AWS Systems Manager Parameter Store
-# Usage: ./06-inject-ssm-parameters.sh [--region <region>] [--dry-run]
+# Usage: ./08-inject-ssm-parameters.sh [--region <region>] [--dry-run]
 #
 # This script reads key-value pairs from .env.ssm file and creates them as
 # AWS SSM parameters. It's a generic script that works for any service.
@@ -12,6 +12,8 @@
 # Parameters are created as SecureString by default for security.
 
 set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Default values
 AWS_REGION="${AWS_REGION:-ap-south-1}"
@@ -64,72 +66,24 @@ echo ""
 # Check if .env.ssm file exists, if not generate from environment variables
 if [ ! -f "$ENV_FILE" ]; then
     echo -e "${YELLOW}⚠️  $ENV_FILE not found, generating from environment variables...${NC}"
-    
-    # Check if .env.ssm.example exists as template
-    if [ ! -f ".env.ssm.example" ]; then
-        echo -e "${RED}✗ Error: .env.ssm.example template not found${NC}"
-        exit 1
-    fi
-    
-    # Generate .env.ssm from environment variables using .env.ssm.example as template
-    echo "# Generated from environment variables on $(date)" > "$ENV_FILE"
-    echo "" >> "$ENV_FILE"
-    
-    # Extract parameter paths from .env.ssm.example (lines starting with /)
-    while IFS='=' read -r key value || [ -n "$key" ]; do
-        # Skip empty lines and comments
-        [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
-        
-        # Only process lines that start with / (SSM parameter paths)
-        if [[ "$key" =~ ^/ ]]; then
-            key=$(echo "$key" | xargs)  # Trim whitespace
-            
-            # Convert SSM path to environment variable name
-            # /zerotouch/prod/agent-executor/openai_api_key -> OPENAI_API_KEY
-            env_var=$(echo "$key" | sed 's|^/zerotouch/prod/[^/]*/||' | tr '[:lower:]' '[:upper:]' | tr '/' '_' | tr '-' '_')
-            
-            # Special mappings for common variables
-            case "$key" in
-                */openai_api_key) env_var="OPENAI_API_KEY" ;;
-                */github/username) env_var="PAT_GITHUB_USER" ;;
-                */github/token|*/github/password) env_var="PAT_GITHUB" ;;
-                */ghcr/username) env_var="PAT_GITHUB_USER" ;;
-                */ghcr/password) env_var="PAT_GITHUB" ;;
-            esac
-            
-            # Get value from environment variable
-            env_value="${!env_var:-}"
-            
-            if [ -n "$env_value" ]; then
-                echo "$key=$env_value" >> "$ENV_FILE"
-                echo -e "${GREEN}✓ Mapped $env_var -> $key${NC}"
-            else
-                echo -e "${YELLOW}⚠️  Environment variable $env_var not set for $key${NC}"
-                # Add placeholder to show what's missing
-                echo "# $key=MISSING_${env_var}" >> "$ENV_FILE"
-            fi
-        fi
-    done < ".env.ssm.example"
-    
-    echo ""
-    echo -e "${GREEN}✓ Generated $ENV_FILE from environment variables${NC}"
+    "$SCRIPT_DIR/helpers/generate-env-ssm.sh"
 fi
 
 # Check AWS CLI is installed
-    if ! command -v aws &> /dev/null; then
-        echo -e "${RED}✗ Error: AWS CLI not found${NC}"
-        echo -e "${YELLOW}Install AWS CLI: https://aws.amazon.com/cli/${NC}"
-        exit 1
-    fi
+if ! command -v aws &> /dev/null; then
+    echo -e "${RED}✗ Error: AWS CLI not found${NC}"
+    echo -e "${YELLOW}Install AWS CLI: https://aws.amazon.com/cli/${NC}"
+    exit 1
+fi
 
-    # Check AWS credentials are configured
-    if ! aws sts get-caller-identity &> /dev/null; then
-        echo -e "${RED}✗ Error: AWS credentials not configured${NC}"
-        echo -e "${YELLOW}Configure AWS credentials:${NC}"
-        echo -e "  ${GREEN}aws configure${NC}"
-        echo -e "  ${GREEN}# OR set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY${NC}"
-        exit 1
-    fi
+# Check AWS credentials are configured
+if ! aws sts get-caller-identity &> /dev/null; then
+    echo -e "${RED}✗ Error: AWS credentials not configured${NC}"
+    echo -e "${YELLOW}Configure AWS credentials:${NC}"
+    echo -e "  ${GREEN}aws configure${NC}"
+    echo -e "  ${GREEN}# OR set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY${NC}"
+    exit 1
+fi
 
 echo -e "${GREEN}✓ AWS CLI configured${NC}"
 echo -e "${GREEN}✓ Region: $AWS_REGION${NC}"
@@ -173,7 +127,6 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
     # Create or update parameter/secret
     if [ "$DRY_RUN" = true ]; then
         echo -e "${BLUE}[DRY RUN]${NC} Would create: $key"
-
     else
         echo -e "${BLUE}Creating parameter:${NC} $key"
         

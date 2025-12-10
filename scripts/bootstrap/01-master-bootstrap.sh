@@ -106,7 +106,7 @@ fi
 # PRODUCTION MODE SETUP
 # ============================================================================
 if [ "$MODE" = "production" ]; then
-    CREDENTIALS_FILE=$("$SCRIPT_DIR/production/setup-production.sh" "$SERVER_IP" "$ROOT_PASSWORD" "$WORKER_NODES" "$WORKER_PASSWORD")
+    CREDENTIALS_FILE=$("$SCRIPT_DIR/helpers/setup-production.sh" "$SERVER_IP" "$ROOT_PASSWORD" "$WORKER_NODES" "$WORKER_PASSWORD")
 fi
 
 # ============================================================================
@@ -122,7 +122,7 @@ if [ "$MODE" = "production" ]; then
     echo -e "${YELLOW}[2/13] Installing Talos OS...${NC}"
     "$SCRIPT_DIR/03-install-talos.sh" --server-ip "$SERVER_IP" --user root --password "$ROOT_PASSWORD" --yes
 
-    "$SCRIPT_DIR/production/add-credentials.sh" "$CREDENTIALS_FILE" "TALOS CREDENTIALS" "Talos Config: bootstrap/talos/talosconfig
+    "$SCRIPT_DIR/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "TALOS CREDENTIALS" "Talos Config: bootstrap/talos/talosconfig
 Control Plane Config: bootstrap/talos/nodes/cp01-main/config.yaml
 
 Access Talos:
@@ -156,7 +156,7 @@ echo -e "${YELLOW}[7/13] Injecting SSM parameters...${NC}"
 "$SCRIPT_DIR/08-inject-ssm-parameters.sh"
 
 if [ "$MODE" = "production" ]; then
-    "$SCRIPT_DIR/production/add-credentials.sh" "$CREDENTIALS_FILE" "AWS SSM PARAMETER STORE" "Parameters injected from .env.ssm to AWS SSM Parameter Store
+    "$SCRIPT_DIR/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "AWS SSM PARAMETER STORE" "Parameters injected from .env.ssm to AWS SSM Parameter Store
 
 Verify parameters:
   aws ssm get-parameters-by-path --path /zerotouch/prod --region ap-south-1"
@@ -186,7 +186,7 @@ fi
 ARGOCD_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>/dev/null | base64 -d || echo "NOT_GENERATED")
 
 if [ "$MODE" = "production" ]; then
-    "$SCRIPT_DIR/production/add-credentials.sh" "$CREDENTIALS_FILE" "ARGOCD CREDENTIALS" "Username: admin
+    "$SCRIPT_DIR/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "ARGOCD CREDENTIALS" "Username: admin
 Password: $ARGOCD_PASSWORD
 
 Access ArgoCD UI:
@@ -211,7 +211,7 @@ if [ "$MODE" = "production" ]; then
         echo -e "${BLUE}ℹ  You can configure manually: ./scripts/bootstrap/13-configure-repo-credentials.sh --auto${NC}"
     }
 
-    "$SCRIPT_DIR/production/add-credentials.sh" "$CREDENTIALS_FILE" "ARGOCD REPOSITORY CREDENTIALS" "Repository credentials managed via ExternalSecrets from AWS SSM
+    "$SCRIPT_DIR/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "ARGOCD REPOSITORY CREDENTIALS" "Repository credentials managed via ExternalSecrets from AWS SSM
 
 Verify:
   kubectl get secret -n argocd -l argocd.argoproj.io/secret-type=repository
