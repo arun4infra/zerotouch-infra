@@ -61,15 +61,58 @@ echo -e "${BLUE}║   AWS SSM Parameter Store - Secrets Injection               
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-# Check if .env.ssm file exists
+# Check if .env.ssm file exists, if not generate from environment variables
 if [ ! -f "$ENV_FILE" ]; then
-    echo -e "${RED}✗ Error: $ENV_FILE file not found${NC}"
+    echo -e "${YELLOW}⚠️  $ENV_FILE not found, generating from environment variables...${NC}"
+    
+    # Check if .env.ssm.example exists as template
+    if [ ! -f ".env.ssm.example" ]; then
+        echo -e "${RED}✗ Error: .env.ssm.example template not found${NC}"
+        exit 1
+    fi
+    
+    # Generate .env.ssm from environment variables using .env.ssm.example as template
+    echo "# Generated from environment variables on $(date)" > "$ENV_FILE"
+    echo "" >> "$ENV_FILE"
+    
+    # Extract parameter paths from .env.ssm.example (lines starting with /)
+    while IFS='=' read -r key value || [ -n "$key" ]; do
+        # Skip empty lines and comments
+        [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+        
+        # Only process lines that start with / (SSM parameter paths)
+        if [[ "$key" =~ ^/ ]]; then
+            key=$(echo "$key" | xargs)  # Trim whitespace
+            
+            # Convert SSM path to environment variable name
+            # /zerotouch/prod/agent-executor/openai_api_key -> OPENAI_API_KEY
+            env_var=$(echo "$key" | sed 's|^/zerotouch/prod/[^/]*/||' | tr '[:lower:]' '[:upper:]' | tr '/' '_' | tr '-' '_')
+            
+            # Special mappings for common variables
+            case "$key" in
+                */openai_api_key) env_var="OPENAI_API_KEY" ;;
+                */github/username) env_var="PAT_GITHUB_USER" ;;
+                */github/token|*/github/password) env_var="PAT_GITHUB" ;;
+                */ghcr/username) env_var="PAT_GITHUB_USER" ;;
+                */ghcr/password) env_var="PAT_GITHUB" ;;
+            esac
+            
+            # Get value from environment variable
+            env_value="${!env_var:-}"
+            
+            if [ -n "$env_value" ]; then
+                echo "$key=$env_value" >> "$ENV_FILE"
+                echo -e "${GREEN}✓ Mapped $env_var -> $key${NC}"
+            else
+                echo -e "${YELLOW}⚠️  Environment variable $env_var not set for $key${NC}"
+                # Add placeholder to show what's missing
+                echo "# $key=MISSING_${env_var}" >> "$ENV_FILE"
+            fi
+        fi
+    done < ".env.ssm.example"
+    
     echo ""
-    echo -e "${YELLOW}Create $ENV_FILE with your secrets:${NC}"
-    echo -e "  ${GREEN}cp .env.ssm.example .env.ssm${NC}"
-    echo -e "  ${GREEN}# Edit .env.ssm with your actual secrets${NC}"
-    echo ""
-    exit 1
+    echo -e "${GREEN}✓ Generated $ENV_FILE from environment variables${NC}"
 fi
 
 # Check AWS CLI is installed
