@@ -195,13 +195,7 @@ fi
 
 # Step 6: Inject ESO Secrets
 echo -e "${YELLOW}[6/13] Injecting ESO secrets...${NC}"
-if [ "$MODE" = "preview" ]; then
-    # In preview mode, use environment variables
-    "$SCRIPT_DIR/07-inject-eso-secrets.sh" "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY"
-else
-    # In production mode, auto-detect from AWS CLI
-    "$SCRIPT_DIR/07-inject-eso-secrets.sh"
-fi
+"$SCRIPT_DIR/07-inject-eso-secrets.sh"
 
 # Step 7: Inject SSM Parameters (BEFORE ArgoCD)
 echo -e "${YELLOW}[7/13] Injecting SSM parameters...${NC}"
