@@ -153,14 +153,7 @@ echo -e "${YELLOW}[6/13] Injecting ESO secrets...${NC}"
 
 # Step 7: Inject SSM Parameters (BEFORE ArgoCD)
 echo -e "${YELLOW}[7/13] Injecting SSM parameters...${NC}"
-if [ "$MODE" = "preview" ]; then
-    # In preview mode, generate .env.ssm and create Kubernetes secrets directly
-    "$SCRIPT_DIR/08-inject-ssm-parameters.sh" --preview-mode
-    "$SCRIPT_DIR/preview/create-k8s-secrets.sh"
-else
-    # In production mode, inject into AWS SSM Parameter Store
-    "$SCRIPT_DIR/08-inject-ssm-parameters.sh"
-fi
+"$SCRIPT_DIR/08-inject-ssm-parameters.sh"
 
 if [ "$MODE" = "production" ]; then
     "$SCRIPT_DIR/production/add-credentials.sh" "$CREDENTIALS_FILE" "AWS SSM PARAMETER STORE" "Parameters injected from .env.ssm to AWS SSM Parameter Store

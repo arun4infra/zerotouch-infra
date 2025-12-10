@@ -16,7 +16,6 @@ set -e
 # Default values
 AWS_REGION="${AWS_REGION:-ap-south-1}"
 DRY_RUN=false
-PREVIEW_MODE=false
 ENV_FILE=".env.ssm"
 
 # Colors for output
@@ -37,17 +36,12 @@ while [[ $# -gt 0 ]]; do
             DRY_RUN=true
             shift
             ;;
-        --preview-mode)
-            PREVIEW_MODE=true
-            shift
-            ;;
         --help)
-            echo "Usage: $0 [--region <region>] [--dry-run] [--preview-mode]"
+            echo "Usage: $0 [--region <region>] [--dry-run]"
             echo ""
             echo "Options:"
             echo "  --region <region>  AWS region (default: ap-south-1)"
             echo "  --dry-run          Show what would be created without creating"
-            echo "  --preview-mode     Create Kubernetes secrets instead of SSM parameters"
             echo "  --help             Show this help message"
             echo ""
             echo "File format (.env.ssm):"
@@ -62,15 +56,9 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [ "$PREVIEW_MODE" = true ]; then
-    echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${BLUE}║   Preview Mode - Kubernetes Secrets Creation                ║${NC}"
-    echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
-else
-    echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${BLUE}║   AWS SSM Parameter Store - Secrets Injection               ║${NC}"
-    echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
-fi
+echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║   AWS SSM Parameter Store - Secrets Injection               ║${NC}"
+echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
 # Check if .env.ssm file exists, if not generate from environment variables
@@ -127,8 +115,7 @@ if [ ! -f "$ENV_FILE" ]; then
     echo -e "${GREEN}✓ Generated $ENV_FILE from environment variables${NC}"
 fi
 
-if [ "$PREVIEW_MODE" = false ]; then
-    # Check AWS CLI is installed
+# Check AWS CLI is installed
     if ! command -v aws &> /dev/null; then
         echo -e "${RED}✗ Error: AWS CLI not found${NC}"
         echo -e "${YELLOW}Install AWS CLI: https://aws.amazon.com/cli/${NC}"
@@ -189,11 +176,7 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
     # Create or update parameter/secret
     if [ "$DRY_RUN" = true ]; then
         echo -e "${BLUE}[DRY RUN]${NC} Would create: $key"
-    elif [ "$PREVIEW_MODE" = true ]; then
-        # In preview mode, skip SSM creation (secrets will be created separately)
-        echo -e "${BLUE}Preview mode:${NC} $key"
-        echo -e "${GREEN}✓ Configured: $key${NC}"
-        PARAM_COUNT=$((PARAM_COUNT + 1))
+
     else
         echo -e "${BLUE}Creating parameter:${NC} $key"
         
@@ -239,20 +222,12 @@ fi
 echo ""
 
 if [ "$DRY_RUN" = false ] && [ $PARAM_COUNT -gt 0 ]; then
-    if [ "$PREVIEW_MODE" = true ]; then
-        echo -e "${GREEN}✓ Preview secrets configuration completed${NC}"
-        echo ""
-        echo -e "${YELLOW}Next steps:${NC}"
-        echo -e "  1. ESO will sync secrets from the generated .env.ssm configuration"
-        echo -e "  2. Check ExternalSecret status: ${GREEN}kubectl get externalsecret -A${NC}"
-    else
-        echo -e "${GREEN}✓ Secrets successfully injected into AWS SSM Parameter Store${NC}"
-        echo ""
-        echo -e "${YELLOW}Next steps:${NC}"
-        echo -e "  1. Verify parameters: ${GREEN}aws ssm get-parameters-by-path --path /zerotouch/prod --recursive --region $AWS_REGION${NC}"
-        echo -e "  2. ESO will automatically sync these secrets to Kubernetes"
-        echo -e "  3. Check ExternalSecret status: ${GREEN}kubectl get externalsecret -A${NC}"
-    fi
+    echo -e "${GREEN}✓ Secrets successfully injected into AWS SSM Parameter Store${NC}"
+    echo ""
+    echo -e "${YELLOW}Next steps:${NC}"
+    echo -e "  1. Verify parameters: ${GREEN}aws ssm get-parameters-by-path --path /zerotouch/prod --recursive --region $AWS_REGION${NC}"
+    echo -e "  2. ESO will automatically sync these secrets to Kubernetes"
+    echo -e "  3. Check ExternalSecret status: ${GREEN}kubectl get externalsecret -A${NC}"
 fi
 
 echo ""
