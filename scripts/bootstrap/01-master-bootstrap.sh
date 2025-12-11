@@ -178,9 +178,19 @@ echo -e "${YELLOW}[10/14] Verifying ESO...${NC}"
 echo -e "${YELLOW}[11/14] Verifying child applications...${NC}"
 "$SCRIPT_DIR/12-verify-child-apps.sh"
 
-# Step 12: Wait for all apps to be healthy
-echo -e "${YELLOW}[12/14] Waiting for all applications to be healthy...${NC}"
-"$SCRIPT_DIR/12a-wait-apps-healthy.sh" --timeout 600
+# Step 12: Fix Kind conflicts (preview mode only)
+if [ "$MODE" = "preview" ]; then
+    echo -e "${YELLOW}[12/14] Fixing Kind deployment conflicts...${NC}"
+    "$SCRIPT_DIR/helpers/fix-kind-conflicts.sh"
+fi
+
+# Step 13: Wait for all apps to be healthy
+echo -e "${YELLOW}[13/14] Waiting for all applications to be healthy...${NC}"
+if [ "$MODE" = "preview" ]; then
+    "$SCRIPT_DIR/12a-wait-apps-healthy.sh" --timeout 600 --preview-mode
+else
+    "$SCRIPT_DIR/12a-wait-apps-healthy.sh" --timeout 600
+fi
 
 # Extract ArgoCD password
 ARGOCD_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" 2>/dev/null | base64 -d || echo "NOT_GENERATED")
@@ -205,7 +215,7 @@ fi
 
 if [ "$MODE" = "production" ]; then
     # Step 14: Configure repository credentials
-    echo -e "${YELLOW}[14/15] Configuring repository credentials...${NC}"
+    echo -e "${YELLOW}[14/14] Configuring repository credentials...${NC}"
     "$SCRIPT_DIR/13-configure-repo-credentials.sh" --auto || {
         echo -e "${YELLOW}⚠️  Repository credentials configuration had issues${NC}"
         echo -e "${BLUE}ℹ  You can configure manually: ./scripts/bootstrap/13-configure-repo-credentials.sh --auto${NC}"
@@ -217,11 +227,15 @@ Verify:
   kubectl get secret -n argocd -l argocd.argoproj.io/secret-type=repository
   kubectl get externalsecret -n argocd"
 else
-    echo -e "${BLUE}[14/15] Skipping repository credentials configuration (preview mode)${NC}"
+    echo -e "${BLUE}[14/14] Skipping repository credentials configuration (preview mode)${NC}"
 fi
 
-# Step 15: Final cluster validation
-echo -e "${YELLOW}[15/15] Running final cluster validation...${NC}"
+# Final cluster validation (optional)
+if [ "$MODE" = "production" ]; then
+    echo -e "${YELLOW}Running final cluster validation...${NC}"
+else
+    echo -e "${BLUE}Skipping final cluster validation (preview mode)${NC}"
+fi
 "$SCRIPT_DIR/99-validate-cluster.sh" || {
     echo -e "${YELLOW}⚠️  Cluster validation found issues${NC}"
     echo -e "${BLUE}ℹ  Check ArgoCD applications: kubectl get applications -n argocd${NC}"

@@ -17,6 +17,7 @@ NC='\033[0m'
 # Configuration
 TIMEOUT=600  # 10 minutes default
 POLL_INTERVAL=15
+PREVIEW_MODE=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -25,12 +26,23 @@ while [[ $# -gt 0 ]]; do
             TIMEOUT="$2"
             shift 2
             ;;
+        --preview-mode)
+            PREVIEW_MODE=true
+            shift
+            ;;
         *)
             echo "Unknown option: $1"
             exit 1
             ;;
     esac
 done
+
+# Infrastructure apps that can be unhealthy in preview mode
+# These are known to have issues in Kind clusters but don't affect core functionality
+PREVIEW_OPTIONAL_APPS=(
+    "cilium"                    # Kind uses kindnet instead
+    "argocd-repo-credentials"   # Tenant repo credentials fail without SSM params
+)
 
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   Waiting for All Applications to be Healthy                ║${NC}"
@@ -56,20 +68,41 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     # Count healthy apps
     HEALTHY_APPS=0
     NOT_READY_APPS=()
+    OPTIONAL_UNHEALTHY=0
     
     while IFS='|' read -r name sync health; do
         if [[ "$sync" == "Synced" && "$health" == "Healthy" ]]; then
             HEALTHY_APPS=$((HEALTHY_APPS + 1))
         else
-            NOT_READY_APPS+=("$name:$sync/$health")
+            # Check if this is an optional app in preview mode
+            IS_OPTIONAL=false
+            if [ "$PREVIEW_MODE" = true ]; then
+                for optional_app in "${PREVIEW_OPTIONAL_APPS[@]}"; do
+                    if [ "$name" = "$optional_app" ]; then
+                        IS_OPTIONAL=true
+                        OPTIONAL_UNHEALTHY=$((OPTIONAL_UNHEALTHY + 1))
+                        break
+                    fi
+                done
+            fi
+            
+            if [ "$IS_OPTIONAL" = false ]; then
+                NOT_READY_APPS+=("$name:$sync/$health")
+            fi
         fi
     done < <(echo "$APPS_JSON" | jq -r '.items[] | "\(.metadata.name)|\(.status.sync.status // "Unknown")|\(.status.health.status // "Unknown")"')
     
-    # Check if all healthy
-    if [ $HEALTHY_APPS -eq $TOTAL_APPS ]; then
-        echo -e "${GREEN}✓ All $TOTAL_APPS applications are Synced & Healthy${NC}"
+    # Check if all required apps are healthy
+    REQUIRED_APPS=$((TOTAL_APPS - OPTIONAL_UNHEALTHY))
+    if [ $HEALTHY_APPS -eq $REQUIRED_APPS ]; then
         echo ""
-        echo "$APPS_JSON" | jq -r '.items[] | "  ✅ \(.metadata.name)"'
+        if [ "$PREVIEW_MODE" = true ] && [ $OPTIONAL_UNHEALTHY -gt 0 ]; then
+            echo -e "${GREEN}✓ All $HEALTHY_APPS required applications are Synced & Healthy${NC}"
+            echo -e "${BLUE}ℹ  $OPTIONAL_UNHEALTHY optional infrastructure apps are unhealthy (acceptable in preview mode)${NC}"
+        else
+            echo -e "${GREEN}✓ All $TOTAL_APPS applications are Synced & Healthy${NC}"
+        fi
+        echo ""
         exit 0
     fi
     
