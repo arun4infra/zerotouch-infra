@@ -31,25 +31,79 @@ echo -e "${BLUE}║   Setup Preview Cluster                                     
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-# Exclude components not needed in preview mode BEFORE any setup
-echo -e "${BLUE}Excluding components not needed for preview mode...${NC}"
+# Configure preview mode - modify local files and ArgoCD manifests
+echo -e "${BLUE}Configuring preview mode...${NC}"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-# Exclude tenant components (require SSM credentials that services don't have)
+# 1. Exclude tenant components from root.yaml
 if [ -f "$REPO_ROOT/bootstrap/root.yaml" ]; then
     sed -i.bak "s|include: '{00-\*,10-\*,11-\*}.yaml'|include: '{00-*,10-*}.yaml'|" "$REPO_ROOT/bootstrap/root.yaml"
     rm -f "$REPO_ROOT/bootstrap/root.yaml.bak"
-    echo -e "${GREEN}✓ Tenant components excluded from bootstrap${NC}"
+    echo -e "${GREEN}✓ Tenant components excluded from root.yaml${NC}"
 fi
 
-# Exclude Cilium (Kind has its own CNI - kindnet)
+# 2. Exclude Cilium (Kind has its own CNI - kindnet)
 if [ -f "$REPO_ROOT/platform/01-foundation/cilium.yaml" ]; then
     mv "$REPO_ROOT/platform/01-foundation/cilium.yaml" "$REPO_ROOT/platform/01-foundation/cilium.yaml.disabled"
-    echo -e "${GREEN}✓ Cilium excluded (using Kind's default networking)${NC}"
-elif [ -f "$REPO_ROOT/platform/01-foundation/cilium.yaml.disabled" ]; then
-    echo -e "${GREEN}✓ Cilium already excluded${NC}"
+    echo -e "${GREEN}✓ Cilium excluded (Kind uses kindnet)${NC}"
 fi
 
+# 3. Update ArgoCD Applications to use local file:// URLs instead of GitHub
+echo -e "${BLUE}Updating ArgoCD manifests to use local filesystem...${NC}"
+GITHUB_URL="https://github.com/arun4infra/zerotouch-platform.git"
+LOCAL_URL="file:///repo"
+
+# Find and replace GitHub URL with local URL in all bootstrap yaml files
+for file in "$REPO_ROOT"/bootstrap/*.yaml "$REPO_ROOT"/bootstrap/components/*.yaml "$REPO_ROOT"/bootstrap/components-tenants/*.yaml; do
+    if [ -f "$file" ]; then
+        if grep -q "$GITHUB_URL" "$file" 2>/dev/null; then
+            sed -i.bak "s|$GITHUB_URL|$LOCAL_URL|g" "$file"
+            rm -f "$file.bak"
+            echo -e "  ${GREEN}✓${NC} Updated: $(basename "$file")"
+        fi
+    fi
+done
+
+# Also remove targetRevision since local files don't have branches
+for file in "$REPO_ROOT"/bootstrap/*.yaml "$REPO_ROOT"/bootstrap/components/*.yaml "$REPO_ROOT"/bootstrap/components-tenants/*.yaml; do
+    if [ -f "$file" ]; then
+        if grep -q "targetRevision:" "$file" 2>/dev/null; then
+            sed -i.bak '/targetRevision:/d' "$file"
+            rm -f "$file.bak"
+        fi
+    fi
+done
+
+echo -e "${GREEN}✓ ArgoCD manifests updated for local filesystem sync${NC}"
+
+# 4. Update Kind config to mount local repo
+echo -e "${BLUE}Updating Kind config to mount local repo...${NC}"
+cat > "$KIND_CONFIG" << EOF
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: zerotouch-preview
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      # NATS client port
+      - containerPort: 30080
+        hostPort: 4222
+        protocol: TCP
+      # PostgreSQL port
+      - containerPort: 30432
+        hostPort: 5432
+        protocol: TCP
+      # Dragonfly (Redis-compatible) port
+      - containerPort: 30379
+        hostPort: 6379
+        protocol: TCP
+    extraMounts:
+      # Mount local repo for ArgoCD to sync from
+      - hostPath: $REPO_ROOT
+        containerPath: /repo
+        readOnly: true
+EOF
+echo -e "${GREEN}✓ Kind config updated with local repo mount at /repo${NC}"
 echo ""
 
 # Validate AWS credentials
