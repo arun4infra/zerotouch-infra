@@ -23,6 +23,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 CLUSTER_NAME="zerotouch-preview"
 KIND_CONFIG="$SCRIPT_DIR/kind-config.yaml"
 
