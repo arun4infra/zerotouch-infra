@@ -99,7 +99,7 @@ echo ""
 if [ "$MODE" = "preview" ]; then
     echo -e "${BLUE}Running in PREVIEW mode (GitHub Actions/Kind)${NC}"
     echo ""
-    "$SCRIPT_DIR/00-setup-preview-cluster.sh"
+    "$SCRIPT_DIR/helpers/setup-preview.sh"
 fi
 
 # ============================================================================
@@ -204,8 +204,8 @@ else
 fi
 
 if [ "$MODE" = "production" ]; then
-    # Step 13: Configure repository credentials
-    echo -e "${YELLOW}[13/14] Configuring repository credentials...${NC}"
+    # Step 14: Configure repository credentials
+    echo -e "${YELLOW}[14/15] Configuring repository credentials...${NC}"
     "$SCRIPT_DIR/13-configure-repo-credentials.sh" --auto || {
         echo -e "${YELLOW}⚠️  Repository credentials configuration had issues${NC}"
         echo -e "${BLUE}ℹ  You can configure manually: ./scripts/bootstrap/13-configure-repo-credentials.sh --auto${NC}"
@@ -217,11 +217,11 @@ Verify:
   kubectl get secret -n argocd -l argocd.argoproj.io/secret-type=repository
   kubectl get externalsecret -n argocd"
 else
-    echo -e "${BLUE}[13/14] Skipping repository credentials configuration (preview mode)${NC}"
+    echo -e "${BLUE}[14/15] Skipping repository credentials configuration (preview mode)${NC}"
 fi
 
-# Step 14: Final cluster validation
-echo -e "${YELLOW}[14/14] Running final cluster validation...${NC}"
+# Step 15: Final cluster validation
+echo -e "${YELLOW}[15/15] Running final cluster validation...${NC}"
 "$SCRIPT_DIR/99-validate-cluster.sh" || {
     echo -e "${YELLOW}⚠️  Cluster validation found issues${NC}"
     echo -e "${BLUE}ℹ  Check ArgoCD applications: kubectl get applications -n argocd${NC}"
