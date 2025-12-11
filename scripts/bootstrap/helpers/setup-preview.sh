@@ -31,23 +31,9 @@ echo -e "${BLUE}║   Setup Preview Cluster                                     
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-# Configure preview mode - modify local files and ArgoCD manifests
-echo -e "${BLUE}Configuring preview mode...${NC}"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-
-# 1. Exclude tenant components from root.yaml
-if [ -f "$REPO_ROOT/bootstrap/root.yaml" ]; then
-    sed -i.bak "s|include: '{00-\*,10-\*,11-\*}.yaml'|include: '{00-*,10-*}.yaml'|" "$REPO_ROOT/bootstrap/root.yaml"
-    rm -f "$REPO_ROOT/bootstrap/root.yaml.bak"
-    echo -e "${GREEN}✓ Tenant components excluded from root.yaml${NC}"
-fi
-
-# 2. Exclude Cilium (Kind has its own CNI - kindnet)
-if [ -f "$REPO_ROOT/platform/01-foundation/cilium.yaml" ]; then
-    mv "$REPO_ROOT/platform/01-foundation/cilium.yaml" "$REPO_ROOT/platform/01-foundation/cilium.yaml.disabled"
-    echo -e "${GREEN}✓ Cilium excluded (Kind uses kindnet)${NC}"
-fi
-
+# Preview mode - tenant resources will be cleaned up after ArgoCD deployment
+echo -e "${BLUE}Preview mode configured${NC}"
+echo ""
 # 3. Update ArgoCD Applications to use local file:// URLs instead of GitHub
 echo -e "${BLUE}Updating ArgoCD manifests to use local filesystem...${NC}"
 GITHUB_URL="https://github.com/arun4infra/zerotouch-platform.git"

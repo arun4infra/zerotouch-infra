@@ -79,14 +79,7 @@ else
 fi
 
 log_info "Applying ArgoCD manifests with control-plane tolerations (version: $ARGOCD_VERSION)..."
-
-# Use preview kustomization if argocd-preview directory exists and we're in preview mode
-if [ -d "$REPO_ROOT/bootstrap/argocd-preview" ] && [ "${PREVIEW_MODE:-false}" = "true" ]; then
-    log_info "Using preview mode ArgoCD configuration (with local repo mount)..."
-    kubectl apply -k "$REPO_ROOT/bootstrap/argocd-preview"
-else
-    kubectl apply -k "$REPO_ROOT/bootstrap/argocd"
-fi
+kubectl apply -k "$REPO_ROOT/bootstrap/argocd"
 
 log_info "✓ ArgoCD manifests applied with control-plane tolerations"
 
