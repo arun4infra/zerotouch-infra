@@ -11,6 +11,9 @@ spec:
     kind: XEventDrivenService
 
   # Use Resources mode with standard patches (no custom function needed)
+  mode: Resources
+  publishConnectionDetailsWithStoreConfigRef:
+    name: default
   resources:
           # Resource 1: ServiceAccount
           - name: serviceaccount
@@ -42,6 +45,11 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.claimRef.namespace
                 toFieldPath: spec.forProvider.manifest.metadata.namespace
+            readinessChecks:
+              - type: MatchCondition
+                matchCondition:
+                  type: Ready
+                  status: "True"
 
           # Resource 2: Deployment
           - name: deployment
@@ -266,6 +274,11 @@ spec:
                 toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[4].secretRef.name
                 policy:
                   fromFieldPath: Optional
+            readinessChecks:
+              - type: MatchCondition
+                matchCondition:
+                  type: Ready
+                  status: "True"
 
           # Resource 3: Service
           - name: service
@@ -310,6 +323,11 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.claimRef.name
                 toFieldPath: spec.forProvider.manifest.spec.selector[app.kubernetes.io/name]
+            readinessChecks:
+              - type: MatchCondition
+                matchCondition:
+                  type: Ready
+                  status: "True"
 
           # Resource 4: KEDA ScaledObject
           - name: scaledobject
@@ -375,5 +393,10 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.nats.consumer
                 toFieldPath: spec.forProvider.manifest.spec.triggers[0].metadata.consumer
+            readinessChecks:
+              - type: MatchCondition
+                matchCondition:
+                  type: Ready
+                  status: "True"
 
 

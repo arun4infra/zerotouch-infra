@@ -18,40 +18,46 @@ SERVER_IP="$1"
 ROOT_PASSWORD="$2"
 WORKER_NODES="${3:-}"
 WORKER_PASSWORD="${4:-}"
+YES_FLAG="${5:-}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BOOTSTRAP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-CREDENTIALS_FILE="$BOOTSTRAP_DIR/.bootstrap-credentials-$(date +%Y%m%d-%H%M%S).txt"
+CREDENTIALS_FILE="$BOOTSTRAP_DIR/bootstrap-credentials/bootstrap-credentials-$(date +%Y%m%d-%H%M%S).txt"
 
-echo -e "${BLUE}Running in PRODUCTION mode (Bare Metal/Talos)${NC}"
-echo ""
+echo -e "${BLUE}Running in PRODUCTION mode (Bare Metal/Talos)${NC}" >&2
+echo "" >&2
 
 # Check if cluster is already bootstrapped
 if kubectl cluster-info &>/dev/null; then
-    echo -e "${YELLOW}⚠️  WARNING: Kubernetes cluster is already accessible${NC}"
-    echo -e "${YELLOW}   This script is designed for initial bootstrap only.${NC}"
-    echo ""
-    echo -e "${BLUE}Current cluster:${NC}"
-    kubectl get nodes 2>/dev/null || true
-    echo ""
-    echo -e "${YELLOW}If you need to:${NC}"
-    echo -e "  - Add repository credentials: ${GREEN}./scripts/bootstrap/13-configure-repo-credentials.sh${NC}"
-    echo -e "  - Inject secrets: ${GREEN}./scripts/bootstrap/07-inject-eso-secrets.sh${NC}"
-    echo -e "  - Add worker nodes: ${GREEN}./scripts/bootstrap/05-add-worker-nodes.sh${NC}"
-    echo ""
-    read -p "Do you want to continue anyway? This may cause issues! (y/N): " -n 1 -r
-    echo ""
+    echo -e "${YELLOW}⚠️  WARNING: Kubernetes cluster is already accessible${NC}" >&2
+    echo -e "${YELLOW}   This script is designed for initial bootstrap only.${NC}" >&2
+    echo "" >&2
+    echo -e "${BLUE}Current cluster:${NC}" >&2
+    kubectl get nodes >&2 2>&1 || true
+    echo "" >&2
+    echo -e "${YELLOW}If you need to:${NC}" >&2
+    echo -e "  - Add repository credentials: ${GREEN}./scripts/bootstrap/13-configure-repo-credentials.sh${NC}" >&2
+    echo -e "  - Inject secrets: ${GREEN}./scripts/bootstrap/07-inject-eso-secrets.sh${NC}" >&2
+    echo -e "  - Add worker nodes: ${GREEN}./scripts/bootstrap/05-add-worker-nodes.sh${NC}" >&2
+    echo "" >&2
+    if [ "$YES_FLAG" = "--yes" ]; then
+        echo "y" >&2
+        REPLY="y"
+    else
+        read -p "Do you want to continue anyway? This may cause issues! (y/N): " -n 1 -r </dev/tty
+        echo "" >&2
+    fi
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo -e "${GREEN}Aborted. Use individual scripts for post-bootstrap tasks.${NC}"
+        echo -e "${GREEN}Aborted. Use individual scripts for post-bootstrap tasks.${NC}" >&2
         exit 0
     fi
-    echo -e "${YELLOW}Continuing with bootstrap (you've been warned!)...${NC}"
-    echo ""
+    echo -e "${YELLOW}Continuing with bootstrap (you've been warned!)...${NC}" >&2
+    echo "" >&2
 fi
 
-echo -e "${GREEN}Server IP:${NC} $SERVER_IP"
-echo -e "${GREEN}Credentials will be saved to:${NC} $CREDENTIALS_FILE"
-echo ""
+echo -e "${GREEN}Server IP:${NC} $SERVER_IP" >&2
+echo -e "${GREEN}Credentials will be saved to:${NC} $CREDENTIALS_FILE" >&2
+echo "" >&2
 
 # Initialize credentials file
 cat > "$CREDENTIALS_FILE" << EOF
@@ -65,7 +71,7 @@ Bootstrap Date: $(date)
 
 EOF
 
-# Export credentials file path for other scripts to use
+# Export credentials file path for other scripts to use (redirect other output to stderr)
 echo "$CREDENTIALS_FILE"
 
 exit 0

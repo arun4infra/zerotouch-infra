@@ -8,7 +8,7 @@ environments/*/*.secret.yaml
 .sops.yaml
 .claude
 docs
-scripts/bootstrap/.bootstrap-credentials-*.txt
+scripts/bootstrap/bootstrap-credentials/*.txt
 bootstrap/talos/nodes/cp01-main/config.yaml.*
 # Temporary files
 *.log

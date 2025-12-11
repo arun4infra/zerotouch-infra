@@ -106,7 +106,14 @@ fi
 # PRODUCTION MODE SETUP
 # ============================================================================
 if [ "$MODE" = "production" ]; then
-    CREDENTIALS_FILE=$("$SCRIPT_DIR/helpers/setup-production.sh" "$SERVER_IP" "$ROOT_PASSWORD" "$WORKER_NODES" "$WORKER_PASSWORD")
+    echo -e "${BLUE}Setting up production environment...${NC}"
+    CREDENTIALS_FILE=$("$SCRIPT_DIR/helpers/setup-production.sh" "$SERVER_IP" "$ROOT_PASSWORD" "$WORKER_NODES" "$WORKER_PASSWORD" --yes)
+    echo -e "${GREEN}✓ Credentials file: $CREDENTIALS_FILE${NC}"
+    
+    if [ -z "$CREDENTIALS_FILE" ] || [ ! -f "$CREDENTIALS_FILE" ]; then
+        echo -e "${RED}Error: Failed to create credentials file${NC}"
+        exit 1
+    fi
 fi
 
 # ============================================================================
@@ -122,15 +129,15 @@ if [ "$MODE" = "production" ]; then
     echo -e "${YELLOW}[2/14] Installing Talos OS...${NC}"
     "$SCRIPT_DIR/03-install-talos.sh" --server-ip "$SERVER_IP" --user root --password "$ROOT_PASSWORD" --yes
 
+    # Step 3: Bootstrap Talos cluster
+    echo -e "${YELLOW}[3/14] Bootstrapping Talos cluster...${NC}"
+    "$SCRIPT_DIR/04-bootstrap-talos.sh" "$SERVER_IP"
+
     "$SCRIPT_DIR/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "TALOS CREDENTIALS" "Talos Config: bootstrap/talos/talosconfig
 Control Plane Config: bootstrap/talos/nodes/cp01-main/config.yaml
 
 Access Talos:
   talosctl --talosconfig bootstrap/talos/talosconfig -n $SERVER_IP version"
-
-    # Step 3: Bootstrap Talos cluster
-    echo -e "${YELLOW}[3/14] Bootstrapping Talos cluster...${NC}"
-    "$SCRIPT_DIR/04-bootstrap-talos.sh" "$SERVER_IP"
 
     # Step 4: Add Worker Nodes (if specified)
     if [ -n "$WORKER_NODES" ]; then

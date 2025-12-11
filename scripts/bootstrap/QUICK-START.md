@@ -151,7 +151,7 @@ kubectl get externalsecret -A
 - `bootstrap/talos/talosconfig` - Talos cluster config
 - `bootstrap/talos/nodes/*/config.yaml` - Node-specific Talos configs
 - `~/.kube/config` - Kubernetes config
-- `scripts/bootstrap/.bootstrap-credentials-*.txt` - All access credentials
+- `scripts/bootstrap/bootstrap-credentials/*.txt` - All access credentials
 
 **Configuration (gitignored):**
 - `environments/<ENV>/talos-values.yaml` - Environment-specific config (IPs, passwords)
