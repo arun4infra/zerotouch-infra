@@ -75,7 +75,33 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     
     # Print progress
     echo -e "${YELLOW}⏳ $HEALTHY_APPS/$TOTAL_APPS healthy ($((ELAPSED/60))m $((ELAPSED%60))s elapsed)${NC}"
-    echo -e "   Not ready: ${NOT_READY_APPS[*]:0:5}..."
+    
+    # Show not ready apps with error details
+    if [ ${#NOT_READY_APPS[@]} -gt 0 ]; then
+        echo -e "   ${YELLOW}Not ready applications:${NC}"
+        for app_status in "${NOT_READY_APPS[@]:0:5}"; do
+            app_name=$(echo "$app_status" | cut -d':' -f1)
+            status=$(echo "$app_status" | cut -d':' -f2)
+            
+            # Get error message if available
+            error_msg=$(kubectl get application "$app_name" -n argocd -o jsonpath='{.status.conditions[?(@.type=="SyncError")].message}' 2>/dev/null)
+            health_msg=$(kubectl get application "$app_name" -n argocd -o jsonpath='{.status.conditions[?(@.type=="HealthError")].message}' 2>/dev/null)
+            
+            echo -n "     - $app_name: $status"
+            
+            if [ -n "$error_msg" ]; then
+                echo -e " ${RED}(Sync: ${error_msg:0:80})${NC}"
+            elif [ -n "$health_msg" ]; then
+                echo -e " ${RED}(Health: ${health_msg:0:80})${NC}"
+            else
+                echo ""
+            fi
+        done
+        
+        if [ ${#NOT_READY_APPS[@]} -gt 5 ]; then
+            echo -e "     ${YELLOW}... and $((${#NOT_READY_APPS[@]} - 5)) more${NC}"
+        fi
+    fi
     
     sleep $POLL_INTERVAL
     ELAPSED=$((ELAPSED + POLL_INTERVAL))
