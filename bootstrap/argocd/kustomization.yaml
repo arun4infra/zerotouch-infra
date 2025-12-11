@@ -5,6 +5,7 @@ namespace: argocd
 
 resources:
   - https://raw.githubusercontent.com/argoproj/argo-cd/v3.2.0/manifests/install.yaml
+  - argocd-cm-patch.yaml
 
 # Add control-plane tolerations to all workloads
 patches:

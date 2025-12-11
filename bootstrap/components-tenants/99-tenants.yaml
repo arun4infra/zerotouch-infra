@@ -19,6 +19,9 @@ spec:
       labels:
         tenant: '{{tenant}}'
         managed-by: applicationset
+      annotations:
+        # Ignore Crossplane-generated resources (Composites, Secrets) that aren't in Git
+        argocd.argoproj.io/compare-options: IgnoreExtraneous
     spec:
       project: default
       source:
