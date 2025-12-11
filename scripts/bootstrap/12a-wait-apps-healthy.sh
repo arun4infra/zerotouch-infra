@@ -109,25 +109,43 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
     # Print progress
     echo -e "${YELLOW}⏳ $HEALTHY_APPS/$TOTAL_APPS healthy ($((ELAPSED/60))m $((ELAPSED%60))s elapsed)${NC}"
     
-    # Show not ready apps with error details
+    # Show not ready apps with FULL error details
     if [ ${#NOT_READY_APPS[@]} -gt 0 ]; then
         echo -e "   ${YELLOW}Not ready applications:${NC}"
         for app_status in "${NOT_READY_APPS[@]:0:5}"; do
             app_name=$(echo "$app_status" | cut -d':' -f1)
             status=$(echo "$app_status" | cut -d':' -f2)
             
-            # Get error message if available
-            error_msg=$(kubectl get application "$app_name" -n argocd -o jsonpath='{.status.conditions[?(@.type=="SyncError")].message}' 2>/dev/null)
-            health_msg=$(kubectl get application "$app_name" -n argocd -o jsonpath='{.status.conditions[?(@.type=="HealthError")].message}' 2>/dev/null)
+            echo -e "     ${YELLOW}$app_name: $status${NC}"
             
-            echo -n "     - $app_name: $status"
+            # Get full app details
+            APP_JSON=$(kubectl get application "$app_name" -n argocd -o json 2>/dev/null)
             
-            if [ -n "$error_msg" ]; then
-                echo -e " ${RED}(Sync: ${error_msg:0:80})${NC}"
-            elif [ -n "$health_msg" ]; then
-                echo -e " ${RED}(Health: ${health_msg:0:80})${NC}"
-            else
-                echo ""
+            # Show degraded resources
+            if [[ "$status" == *"Degraded"* ]]; then
+                DEGRADED=$(echo "$APP_JSON" | jq -r '.status.resources[]? | select(.health.status == "Degraded") | "         \(.kind)/\(.name): \(.health.message // "no message")"' 2>/dev/null)
+                if [ -n "$DEGRADED" ]; then
+                    echo -e "       ${RED}Degraded:${NC}"
+                    echo "$DEGRADED"
+                fi
+            fi
+            
+            # Show progressing resources
+            if [[ "$status" == *"Progressing"* ]]; then
+                PROGRESSING=$(echo "$APP_JSON" | jq -r '.status.resources[]? | select(.health.status == "Progressing") | "         \(.kind)/\(.name): \(.health.message // "waiting")"' 2>/dev/null | head -3)
+                if [ -n "$PROGRESSING" ]; then
+                    echo -e "       ${BLUE}Progressing:${NC}"
+                    echo "$PROGRESSING"
+                fi
+            fi
+            
+            # Show out of sync resources
+            if [[ "$status" == *"OutOfSync"* ]]; then
+                OUTOFSYNC=$(echo "$APP_JSON" | jq -r '.status.resources[]? | select(.status == "OutOfSync") | "         \(.kind)/\(.name)"' 2>/dev/null | head -3)
+                if [ -n "$OUTOFSYNC" ]; then
+                    echo -e "       ${RED}OutOfSync:${NC}"
+                    echo "$OUTOFSYNC"
+                fi
             fi
         done
         
