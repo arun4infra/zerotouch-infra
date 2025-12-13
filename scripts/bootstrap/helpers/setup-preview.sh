@@ -1,131 +1,152 @@
 #!/bin/bash
+# Tier 3 Script: Setup Preview Cluster
+# Creates Kind cluster and installs required tools for CI/CD testing
+#
+# Environment Variables (required):
+#   AWS_ACCESS_KEY_ID - AWS access key for ESO
+#   AWS_SECRET_ACCESS_KEY - AWS secret key for ESO
+#   AWS_SESSION_TOKEN - AWS session token (optional, for OIDC)
+#
+# Exit Codes:
+#   0 - Success
+#   1 - Missing AWS credentials
+#   2 - Tool installation failed
+#   3 - Kind cluster creation failed
+
 set -e
 
-# Preview Environment Setup Script
-# Configures platform for Kind/preview environments using Kustomize overlays
-# Usage: ./setup-preview.sh
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+CLUSTER_NAME="zerotouch-preview"
+KIND_CONFIG="$SCRIPT_DIR/kind-config.yaml"
 
-log_info() {
-    echo -e "\033[0;32m[INFO]\033[0m $1"
-}
+echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║   Setup Preview Cluster                                     ║${NC}"
+echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+echo ""
 
-log_warn() {
-    echo -e "\033[1;33m[WARN]\033[0m $1"
-}
+# Preview mode - tenant resources will be cleaned up after ArgoCD deployment
+echo -e "${BLUE}Preview mode configured${NC}"
+echo ""
 
-log_info "Setting up preview environment configurations..."
-
-# 1. Verify Kustomize overlays exist
-log_info "Verifying Kustomize overlay structure..."
+# 1. Verify Kustomize overlays are ready (industry standard approach)
+echo -e "${BLUE}Verifying Kustomize overlay structure...${NC}"
 
 if [[ ! -d "$REPO_ROOT/platform/05-databases/overlays/development" ]]; then
-    log_warn "Development overlay not found - using industry standard approach"
-    
-    # Create the overlay structure if it doesn't exist
-    mkdir -p "$REPO_ROOT/platform/05-databases/overlays/development"
-    mkdir -p "$REPO_ROOT/platform/05-databases/overlays/production"
-    
-    # Create base kustomization
-    cat > "$REPO_ROOT/platform/05-databases/overlays/kustomization.yaml" << 'EOF'
-# Base kustomization for database compositions
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-  - ../compositions/postgres-composition.yaml
-  - ../compositions/dragonfly-composition.yaml
-EOF
-
-    # Create development overlay
-    cat > "$REPO_ROOT/platform/05-databases/overlays/development/kustomization.yaml" << 'EOF'
-# Development/Kind environment patches
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-  - ../
-
-patches:
-  # PostgreSQL storage class patch for Kind
-  - target:
-      kind: Composition
-      name: postgres-instance
-    patch: |-
-      - op: replace
-        path: /spec/resources/0/base/spec/forProvider/manifest/spec/storage/storageClass
-        value: standard
-
-  # Dragonfly storage class patch for Kind  
-  - target:
-      kind: Composition
-      name: dragonfly-instance
-    patch: |-
-      - op: replace
-        path: /spec/resources/2/base/spec/forProvider/manifest/spec/volumeClaimTemplates/0/spec/storageClassName
-        value: standard
-EOF
-
-    # Create production overlay
-    cat > "$REPO_ROOT/platform/05-databases/overlays/production/kustomization.yaml" << 'EOF'
-# Production environment - uses base configurations as-is
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-  - ../
-
-# No patches needed - production uses local-path as configured in base
-EOF
-
-    log_info "✓ Created Kustomize overlay structure"
+    echo -e "${YELLOW}Development overlay not found - will use runtime patching as fallback${NC}"
+else
+    echo -e "${GREEN}✓ Kustomize overlays ready (no runtime patching needed)${NC}"
 fi
 
-# 2. Verify preview components exist
-log_info "Verifying preview component structure..."
+# 2. Update ArgoCD Applications to use local file:// URLs instead of GitHub
+"$SCRIPT_DIR/ensure-preview-urls.sh" --force
 
-if [[ ! -d "$REPO_ROOT/bootstrap/components/preview" ]]; then
-    log_warn "Preview components not found - this should have been created already"
+# 3. Update Kind config to mount local repo
+echo -e "${BLUE}Updating Kind config to mount local repo...${NC}"
+
+cat > "$KIND_CONFIG" << EOF
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: zerotouch-preview
+nodes:
+- role: control-plane
+  extraPortMappings:
+  # NATS client port
+  - containerPort: 30080
+    hostPort: 4222
+    protocol: TCP
+  # PostgreSQL port
+  - containerPort: 30432
+    hostPort: 5432
+    protocol: TCP
+  # Dragonfly (Redis-compatible) port
+  - containerPort: 30379
+    hostPort: 6379
+    protocol: TCP
+  extraMounts:
+  # Mount local repo for ArgoCD to sync from
+  - hostPath: $REPO_ROOT
+    containerPath: /repo
+    readOnly: true
+EOF
+
+echo -e "${GREEN}✓ Kind config updated with local repo mount at /repo${NC}"
+echo ""
+
+# 4. Validate AWS credentials
+if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+    echo -e "${RED}Error: AWS credentials required${NC}"
+    echo -e "Set: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN (optional)"
     exit 1
 fi
 
-# 3. Detect and configure storage class
-log_info "Detecting available storage classes..."
+echo -e "${GREEN}✓ AWS credentials configured${NC}"
+echo ""
 
-# Get default storage class in Kind
-DEFAULT_SC=$(kubectl get storageclass -o jsonpath='{.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}' 2>/dev/null || echo "standard")
+# 5. Install required tools
+echo -e "${YELLOW}Checking required tools...${NC}"
 
-if [[ -z "$DEFAULT_SC" ]]; then
-    DEFAULT_SC="standard"
+# kubectl
+if ! command -v kubectl &> /dev/null; then
+    echo -e "${BLUE}Installing kubectl...${NC}"
+    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    chmod +x kubectl
+    sudo mv kubectl /usr/local/bin/kubectl || exit 2
+fi
+echo -e "${GREEN}✓ kubectl available${NC}"
+
+# helm
+if ! command -v helm &> /dev/null; then
+    echo -e "${BLUE}Installing helm...${NC}"
+    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash || exit 2
+fi
+echo -e "${GREEN}✓ helm available${NC}"
+
+# kind
+if ! command -v kind &> /dev/null; then
+    echo -e "${BLUE}Installing kind...${NC}"
+    curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+    chmod +x ./kind
+    sudo mv ./kind /usr/local/bin/kind || exit 2
+fi
+echo -e "${GREEN}✓ kind available${NC}"
+echo ""
+
+# 6. Create Kind cluster
+if kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME}$"; then
+    echo -e "${YELLOW}Kind cluster '$CLUSTER_NAME' already exists${NC}"
+else
+    echo -e "${BLUE}Creating Kind cluster '$CLUSTER_NAME'...${NC}"
+    if [ ! -f "$KIND_CONFIG" ]; then
+        echo -e "${RED}Error: Kind config not found at $KIND_CONFIG${NC}"
+        exit 3
+    fi
+    kind create cluster --config "$KIND_CONFIG" || exit 3
+    echo -e "${GREEN}✓ Kind cluster created${NC}"
 fi
 
-log_info "Using storage class: $DEFAULT_SC"
+# 7. Set kubectl context
+kubectl config use-context "kind-${CLUSTER_NAME}"
 
-# 4. Update overlays if non-standard storage class detected
-if [[ "$DEFAULT_SC" != "standard" ]]; then
-    log_warn "Non-standard storage class detected: $DEFAULT_SC"
-    log_info "Updating development overlay to use: $DEFAULT_SC"
-    
-    # Update the development overlay to use the detected storage class
-    sed -i.bak "s/value: standard/value: $DEFAULT_SC/g" \
-        "$REPO_ROOT/platform/05-databases/overlays/development/kustomization.yaml"
-    
-    log_info "✓ Development overlay updated for storage class: $DEFAULT_SC"
-fi
+# 8. Label nodes for database workloads
+echo -e "${BLUE}Labeling nodes for database workloads...${NC}"
+kubectl label nodes --all workload.bizmatters.dev/databases=true --overwrite
+echo -e "${GREEN}✓ Nodes labeled${NC}"
 
-# 5. Verify preview bootstrap application exists
-if [[ ! -f "$REPO_ROOT/bootstrap/10-platform-bootstrap-preview.yaml" ]]; then
-    log_warn "Preview bootstrap application not found - this should have been created already"
-    exit 1
-fi
+echo ""
 
-log_info "✓ Preview environment setup complete!"
-log_info ""
-log_info "Preview mode uses:"
-log_info "  • Kustomize overlays for environment-specific configurations"
-log_info "  • Development overlay with storage class: $DEFAULT_SC"
-log_info "  • Preview components without control plane tolerations"
-log_info "  • Preview bootstrap application: bootstrap/10-platform-bootstrap-preview.yaml"
-log_info ""
+# Preview-specific exclusions and setup complete
+echo ""
+echo -e "${GREEN}✓ Preview cluster setup complete${NC}"
+echo -e "  Cluster: ${BLUE}kind-${CLUSTER_NAME}${NC}"
+echo -e "  Context: ${BLUE}kind-${CLUSTER_NAME}${NC}"
+echo ""
+
+exit 0
