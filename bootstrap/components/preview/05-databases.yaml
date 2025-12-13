@@ -8,8 +8,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/arun4infra/zerotouch-infra.git
-    targetRevision: HEAD
+    repoURL: file:///repo
     path: platform/05-databases/overlays/development  # Use development overlay
   destination:
     server: https://kubernetes.default.svc

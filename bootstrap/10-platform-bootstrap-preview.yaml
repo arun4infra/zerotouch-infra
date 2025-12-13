@@ -8,8 +8,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/arun4infra/zerotouch-infra.git
-    targetRevision: HEAD
+    repoURL: file:///repo
     path: bootstrap/components/preview  # Use preview components
     directory:
       recurse: true
