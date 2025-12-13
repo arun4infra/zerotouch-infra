@@ -19,17 +19,24 @@ platform/05-databases/overlays/
 ```
 bootstrap/components/preview/
 ├── 01-crossplane.yaml         # No control plane tolerations
+├── 01-eso.yaml                # No control plane tolerations
+├── 01-foundation-config.yaml  # Uses file:///repo for local sync (CRITICAL)
 ├── 01-keda.yaml               # No control plane tolerations  
 ├── 01-nats.yaml               # No control plane tolerations, standard storage
-├── 01-eso.yaml                # No control plane tolerations
 └── 05-databases.yaml          # Uses development overlay
 ```
+
+> **Note**: `01-foundation-config.yaml` is critical - it deploys the ClusterSecretStore required for ESO to work.
 
 ### 3. Bootstrap Applications
 - **Production**: `bootstrap/root.yaml` → `bootstrap/10-platform-bootstrap.yaml` → `bootstrap/components/`
 - **Preview**: `bootstrap/root-preview.yaml` → `bootstrap/10-platform-bootstrap-preview.yaml` → `bootstrap/components/preview/`
 
-### 4. Script Updates
+### 4. ESO Bootstrap (Sync Wave 0)
+- **Production**: `bootstrap/00-eso-bootstrap.yaml` → `bootstrap/components/01-eso.yaml` (uses `directory.include`)
+- **Preview**: `bootstrap/00-eso-bootstrap-preview.yaml` → `bootstrap/components/preview/01-eso.yaml` (uses `directory.include`)
+
+### 5. Script Updates
 
 #### `scripts/bootstrap/helpers/setup-preview.sh`
 - ✅ Updated to use Kustomize overlays instead of runtime patching
@@ -43,8 +50,9 @@ bootstrap/components/preview/
 - ✅ Uses `root.yaml` for production mode
 
 #### `scripts/bootstrap/helpers/ensure-preview-urls.sh`
-- ✅ Updated to handle preview components directory
-- ✅ Processes both production and preview component files
+- ⚠️ **DISABLED** - No longer called from setup-preview.sh
+- Preview files already have correct `file:///repo` URLs pre-configured
+- Script was modifying git working tree unnecessarily during CI/CD
 
 #### `scripts/bootstrap/01-master-bootstrap.sh`
 - ✅ Already calls setup-preview.sh in preview mode
@@ -52,6 +60,10 @@ bootstrap/components/preview/
 - ✅ No changes needed
 
 ## Issues Resolved
+
+### ✅ ClusterSecretStore Not Created
+- **Problem**: ESO verification stuck waiting for ClusterSecretStore to be valid
+- **Solution**: Added `01-foundation-config.yaml` to preview components (deploys `platform/01-foundation` with ClusterSecretStore)
 
 ### ✅ NATS Storage Issue
 - **Problem**: PVC stuck on `local-path` storage class in Kind

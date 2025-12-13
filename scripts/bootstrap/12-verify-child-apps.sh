@@ -49,7 +49,20 @@ echo ""
 echo -e "${BLUE}Verifying child Applications...${NC}"
 sleep 10
 
-EXPECTED_APPS=("crossplane-operator" "external-secrets" "keda" "kagent" "apis" "intelligence" "foundation-config" "databases")
+# Check if running in preview mode (Kind cluster)
+IS_PREVIEW_MODE=false
+if kubectl get nodes -o name 2>/dev/null | grep -q "zerotouch-preview"; then
+    IS_PREVIEW_MODE=true
+fi
+
+if [ "$IS_PREVIEW_MODE" = true ]; then
+    # Preview mode: Only core components (no kagent, apis, intelligence)
+    EXPECTED_APPS=("crossplane-operator" "external-secrets" "keda" "foundation-config" "databases")
+    echo -e "${BLUE}Preview mode detected - checking core applications only${NC}"
+else
+    # Production mode: All components
+    EXPECTED_APPS=("crossplane-operator" "external-secrets" "keda" "kagent" "apis" "intelligence" "foundation-config" "databases")
+fi
 MISSING_APPS=()
 
 for app in "${EXPECTED_APPS[@]}"; do
