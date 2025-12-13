@@ -1,4 +1,4 @@
-zerotouch-platform/bootstrap/talos/nodes
+bootstrap/talos/nodes/
 !bootstrap/talos-templates/
 environments/*/talos-values.yaml
 environments/*/talos-values.yaml.bak
