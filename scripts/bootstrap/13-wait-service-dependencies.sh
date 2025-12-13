@@ -56,7 +56,15 @@ check_postgres() {
     local total=$(echo "$clusters_json" | jq -r '.items | length')
     
     if [ "$total" -eq 0 ]; then
-        return 0  # No postgres clusters to check
+        # Check if PostgreSQL XRD exists (should be deployed)
+        if kubectl_retry get xrd xpostgresinstances.database.bizmatters.io >/dev/null 2>&1; then
+            echo -e "   ${RED}PostgreSQL: XRD exists but no clusters deployed!${NC}"
+            echo -e "     ${YELLOW}Check: kubectl get postgresinstances --all-namespaces${NC}"
+            return 1  # XRD exists but no instances - this is a problem
+        else
+            echo -e "   ${YELLOW}PostgreSQL: XRD not found (not deployed in this platform)${NC}"
+            return 0  # XRD doesn't exist - PostgreSQL not part of this deployment
+        fi
     fi
     
     local healthy=0
@@ -75,9 +83,16 @@ check_postgres() {
     echo -e "   PostgreSQL: $healthy/$total ready"
     
     if [ ${#unhealthy_details[@]} -gt 0 ]; then
+        echo -e "     ${RED}Unhealthy clusters:${NC}"
         for detail in "${unhealthy_details[@]:0:3}"; do
-            echo -e "     ${YELLOW}$detail${NC}"
+            echo -e "       ${RED}✗ $detail${NC}"
         done
+        
+        # Show recent events for troubleshooting
+        echo -e "     ${YELLOW}Recent cluster events:${NC}"
+        kubectl_retry get events --all-namespaces --sort-by='.lastTimestamp' | grep -i "postgresql\|cnpg\|cluster" | tail -3 | while read -r event; do
+            echo -e "       ${BLUE}$event${NC}"
+        done 2>/dev/null || echo -e "       ${YELLOW}No recent events found${NC}"
     fi
     
     [ "$healthy" -eq "$total" ]
@@ -89,7 +104,15 @@ check_dragonfly() {
     local total=$(echo "$sts_json" | jq -r '.items | length')
     
     if [ "$total" -eq 0 ]; then
-        return 0  # No dragonfly caches to check
+        # Check if Dragonfly XRD exists (should be deployed)
+        if kubectl_retry get xrd xdragonflyinstances.database.bizmatters.io >/dev/null 2>&1; then
+            echo -e "   ${RED}Dragonfly: XRD exists but no caches deployed!${NC}"
+            echo -e "     ${YELLOW}Check: kubectl get dragonflyinstances --all-namespaces${NC}"
+            return 1  # XRD exists but no instances - this is a problem
+        else
+            echo -e "   ${YELLOW}Dragonfly: XRD not found (not deployed in this platform)${NC}"
+            return 0  # XRD doesn't exist - Dragonfly not part of this deployment
+        fi
     fi
     
     local ready=0
@@ -114,9 +137,16 @@ check_dragonfly() {
     echo -e "   Dragonfly: $ready/$total ready"
     
     if [ ${#unhealthy_details[@]} -gt 0 ]; then
+        echo -e "     ${RED}Unhealthy caches:${NC}"
         for detail in "${unhealthy_details[@]:0:5}"; do
-            echo -e "     ${YELLOW}$detail${NC}"
+            echo -e "       ${RED}✗ $detail${NC}"
         done
+        
+        # Show recent events for troubleshooting
+        echo -e "     ${YELLOW}Recent cache events:${NC}"
+        kubectl_retry get events --all-namespaces --sort-by='.lastTimestamp' | grep -i "dragonfly\|statefulset" | tail -3 | while read -r event; do
+            echo -e "       ${BLUE}$event${NC}"
+        done 2>/dev/null || echo -e "       ${YELLOW}No recent events found${NC}"
     fi
     
     [ "$ready" -eq "$total" ]
@@ -132,6 +162,24 @@ check_nats() {
     local total=$(kubectl_retry get statefulset nats -n nats -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
     
     echo -e "   NATS: $ready/$total ready"
+    
+    if [ "$ready" -ne "$total" ]; then
+        echo -e "     ${RED}NATS not ready:${NC}"
+        echo -e "       ${RED}✗ nats/nats: $ready/$total replicas${NC}"
+        
+        # Show pod status
+        echo -e "     ${YELLOW}Pod status:${NC}"
+        kubectl_retry get pods -n nats -l app.kubernetes.io/name=nats -o wide 2>/dev/null | while read -r pod; do
+            echo -e "       ${BLUE}$pod${NC}"
+        done || echo -e "       ${YELLOW}No pods found${NC}"
+        
+        # Show recent events
+        echo -e "     ${YELLOW}Recent events:${NC}"
+        kubectl_retry get events -n nats --sort-by='.lastTimestamp' | grep -i nats | tail -3 | while read -r event; do
+            echo -e "       ${BLUE}$event${NC}"
+        done 2>/dev/null || echo -e "       ${YELLOW}No recent events found${NC}"
+    fi
+    
     [ "$ready" -eq "$total" ]
 }
 
@@ -168,8 +216,20 @@ check_external_secrets() {
     echo -e "   External Secrets: Store=$store_ready, Secrets=$synced/$total"
     
     if [ ${#failed_secrets[@]} -gt 0 ]; then
-        for secret in "${failed_secrets[@]:0:3}"; do
-            echo -e "     ${YELLOW}$secret${NC}"
+        echo -e "     ${RED}Failed secrets:${NC}"
+        for secret in "${failed_secrets[@]:0:5}"; do
+            echo -e "       ${RED}✗ $secret${NC}"
+            
+            # Get detailed error message for this secret
+            local namespace=$(echo "$secret" | cut -d'/' -f1)
+            local name=$(echo "$secret" | cut -d':' -f1 | cut -d'/' -f2)
+            local error_msg=$(kubectl_retry get externalsecret "$name" -n "$namespace" -o jsonpath='{.status.conditions[0].message}' 2>/dev/null || echo "Unknown error")
+            echo -e "         ${YELLOW}Error: $error_msg${NC}"
+            
+            # Check if this is a tenant repo secret (expected to fail in preview)
+            if [[ "$name" == repo-* ]] && [ "$PREVIEW_MODE" = true ]; then
+                echo -e "         ${BLUE}Note: Tenant repo secrets expected to fail in preview mode${NC}"
+            fi
         done
     fi
     
@@ -208,10 +268,64 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
 done
 
 echo ""
-echo -e "${RED}✗ Timeout after $((TIMEOUT/60)) minutes${NC}"
-echo -e "${YELLOW}Some services are not ready. Check:${NC}"
-echo "  kubectl get clusters.postgresql.cnpg.io --all-namespaces"
-echo "  kubectl get statefulsets --all-namespaces -l app.kubernetes.io/name=dragonfly"
-echo "  kubectl get statefulset nats -n nats"
-echo "  kubectl get externalsecrets --all-namespaces"
+echo -e "${RED}╔══════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${RED}║   TIMEOUT: Services not ready after $((TIMEOUT/60)) minutes              ║${NC}"
+echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+
+echo -e "${YELLOW}Final service status:${NC}"
+echo ""
+
+# Show final detailed status for all services
+echo -e "${BLUE}=== PostgreSQL Status ===${NC}"
+check_postgres || true
+echo ""
+
+echo -e "${BLUE}=== Dragonfly Status ===${NC}"
+check_dragonfly || true
+echo ""
+
+echo -e "${BLUE}=== NATS Status ===${NC}"
+check_nats || true
+echo ""
+
+echo -e "${BLUE}=== External Secrets Status ===${NC}"
+check_external_secrets || true
+echo ""
+
+echo -e "${YELLOW}=== DETAILED DIAGNOSTICS ===${NC}"
+echo ""
+
+echo -e "${BLUE}PostgreSQL Clusters:${NC}"
+kubectl_retry get clusters.postgresql.cnpg.io --all-namespaces -o wide 2>/dev/null || echo "No PostgreSQL clusters found"
+echo ""
+
+echo -e "${BLUE}Dragonfly Caches:${NC}"
+kubectl_retry get statefulsets --all-namespaces -l app.kubernetes.io/name=dragonfly -o wide 2>/dev/null || echo "No Dragonfly caches found"
+echo ""
+
+echo -e "${BLUE}NATS Messaging:${NC}"
+kubectl_retry get statefulset nats -n nats -o wide 2>/dev/null || echo "No NATS found"
+echo ""
+
+echo -e "${BLUE}External Secrets:${NC}"
+kubectl_retry get externalsecrets --all-namespaces -o wide 2>/dev/null || echo "No ExternalSecrets found"
+echo ""
+
+echo -e "${BLUE}ClusterSecretStore Status:${NC}"
+kubectl_retry get clustersecretstore aws-parameter-store -o jsonpath='{.status}' 2>/dev/null | jq '.' 2>/dev/null || echo "ClusterSecretStore not found or invalid"
+echo ""
+
+echo -e "${BLUE}Recent Events (last 10):${NC}"
+kubectl_retry get events --all-namespaces --sort-by='.lastTimestamp' | tail -10 2>/dev/null || echo "No events found"
+echo ""
+
+echo -e "${YELLOW}Manual debug commands:${NC}"
+echo "  kubectl get clusters.postgresql.cnpg.io --all-namespaces -o wide"
+echo "  kubectl get statefulsets --all-namespaces -l app.kubernetes.io/name=dragonfly -o wide"
+echo "  kubectl get statefulset nats -n nats -o wide"
+echo "  kubectl get externalsecrets --all-namespaces -o wide"
+echo "  kubectl describe clustersecretstore aws-parameter-store"
+echo ""
+
 exit 1
