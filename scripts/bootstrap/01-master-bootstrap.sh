@@ -78,6 +78,29 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Validate worker nodes format if provided
+if [ -n "$WORKER_NODES" ]; then
+    echo -e "${BLUE}Validating worker nodes format...${NC}"
+    
+    # Split by comma and validate each entry
+    IFS=',' read -ra WORKER_ARRAY <<< "$WORKER_NODES"
+    for worker_entry in "${WORKER_ARRAY[@]}"; do
+        # Check if entry contains colon (name:ip format)
+        if [[ ! "$worker_entry" =~ ^[a-zA-Z0-9_-]+:[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo -e "${RED}Error: Invalid worker node format: '$worker_entry'${NC}"
+            echo -e "${RED}Expected format: name:ip (e.g., worker01:95.216.151.243)${NC}"
+            echo ""
+            echo -e "${YELLOW}Examples:${NC}"
+            echo -e "  Single worker:   --worker-nodes worker01:95.216.151.243"
+            echo -e "  Multiple workers: --worker-nodes worker01:95.216.151.243,worker02:95.216.151.244"
+            echo ""
+            exit 1
+        fi
+    done
+    
+    echo -e "${GREEN}✓ Worker nodes format validated${NC}"
+fi
+
 # If worker password not specified, use control plane password
 if [ -z "$WORKER_PASSWORD" ] && [ -n "$ROOT_PASSWORD" ]; then
     WORKER_PASSWORD="$ROOT_PASSWORD"
