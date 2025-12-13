@@ -7,7 +7,6 @@ spec:
   project: default
   source:
     repoURL: file:///repo
-    targetRevision: HEAD
     path: bootstrap
     directory:
       recurse: false
