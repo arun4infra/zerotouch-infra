@@ -118,15 +118,6 @@ spec:
                     labels:
                       app: dragonfly
                   spec:
-                    affinity:
-                      nodeAffinity:
-                        requiredDuringSchedulingIgnoredDuringExecution:
-                          nodeSelectorTerms:
-                            - matchExpressions:
-                                - key: workload-type
-                                  operator: In
-                                  values:
-                                    - stateful
                     containers:
                       - name: dragonfly
                         image: docker.dragonflydb.io/dragonflydb/dragonfly:latest

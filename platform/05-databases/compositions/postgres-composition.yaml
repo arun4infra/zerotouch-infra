@@ -36,15 +36,6 @@ spec:
                   initdb:
                     database: placeholder
                     owner: placeholder
-                affinity:
-                  nodeAffinity:
-                    requiredDuringSchedulingIgnoredDuringExecution:
-                      nodeSelectorTerms:
-                        - matchExpressions:
-                            - key: workload.bizmatters.dev/databases
-                              operator: In
-                              values:
-                                - "true"
                 resources:
                   requests:
                     memory: "512Mi"

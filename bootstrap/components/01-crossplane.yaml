@@ -15,6 +15,12 @@ spec:
       parameters:
         - name: "args[0]"
           value: "--enable-composition-revisions"
+      values: |
+        # Allow Crossplane to run on control plane nodes
+        tolerations:
+          - key: node-role.kubernetes.io/control-plane
+            operator: Exists
+            effect: NoSchedule
   destination:
     server: https://kubernetes.default.svc
     namespace: crossplane-system
