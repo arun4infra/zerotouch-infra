@@ -380,7 +380,7 @@ cluster:
     secret: LOuAzLsLUSXmY+tqNgHkBYr41ec08uonQNjx109xPuE= # Shared secret of cluster (base64 encoded random 32 bytes).
     # Provides control plane specific configuration options.
     controlPlane:
-        endpoint: https://46.62.218.181:6443 # Endpoint is the canonical controlplane endpoint, which can be an IP address or a DNS hostname.
+        endpoint: https://95.216.151.243:6443 # Endpoint is the canonical controlplane endpoint, which can be an IP address or a DNS hostname.
     clusterName: bizmatters-dev-01 # Configures the cluster's name.
     # Provides cluster specific network configuration options.
     network:

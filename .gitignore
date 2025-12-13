@@ -1,4 +1,4 @@
-!bootstrap/talos/*
+zerotouch-platform/bootstrap/talos/nodes
 !bootstrap/talos-templates/
 environments/*/talos-values.yaml
 environments/*/talos-values.yaml.bak
@@ -19,3 +19,4 @@ bootstrap/talos/nodes/cp01-main/config.yaml.*
 *.log
 ztp-codebase.md
 .env.ssm.bkp
+archived
