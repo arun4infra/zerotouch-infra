@@ -1,18 +1,26 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: eso-bootstrap
+  name: external-secrets
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 spec:
   project: default
   source:
-    repoURL: file:///repo
-    path: bootstrap/components/preview/eso
+    chart: external-secrets
+    repoURL: https://charts.external-secrets.io
+    targetRevision: 0.9.13
+    helm:
+      values: |
+        installCRDs: true
+        webhook:
+          create: true
+        
+        # Preview mode: No tolerations or nodeSelector needed for Kind clusters
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    namespace: external-secrets
   syncPolicy:
     automated:
       prune: true
