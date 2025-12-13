@@ -215,11 +215,19 @@ if [ "$MODE" = "preview" ]; then
 fi
 
 # Step 13: Wait for all apps to be healthy
-echo -e "${YELLOW}[13/14] Waiting for all applications to be healthy...${NC}"
+echo -e "${YELLOW}[13/15] Waiting for all applications to be healthy...${NC}"
 if [ "$MODE" = "preview" ]; then
     "$SCRIPT_DIR/12a-wait-apps-healthy.sh" --timeout 600 --preview-mode
 else
     "$SCRIPT_DIR/12a-wait-apps-healthy.sh" --timeout 600
+fi
+
+# Step 14: Wait for service dependencies
+echo -e "${YELLOW}[14/15] Waiting for platform services to be ready...${NC}"
+if [ "$MODE" = "preview" ]; then
+    "$SCRIPT_DIR/13-wait-service-dependencies.sh" --timeout 300 --preview-mode
+else
+    "$SCRIPT_DIR/13-wait-service-dependencies.sh" --timeout 300
 fi
 
 # Extract ArgoCD password
@@ -244,8 +252,8 @@ else
 fi
 
 if [ "$MODE" = "production" ]; then
-    # Step 14: Configure repository credentials
-    echo -e "${YELLOW}[14/14] Configuring repository credentials...${NC}"
+    # Step 15: Configure repository credentials
+    echo -e "${YELLOW}[15/15] Configuring repository credentials...${NC}"
     "$SCRIPT_DIR/13-configure-repo-credentials.sh" --auto || {
         echo -e "${YELLOW}⚠️  Repository credentials configuration had issues${NC}"
         echo -e "${BLUE}ℹ  You can configure manually: ./scripts/bootstrap/13-configure-repo-credentials.sh --auto${NC}"
@@ -257,7 +265,7 @@ Verify:
   kubectl get secret -n argocd -l argocd.argoproj.io/secret-type=repository
   kubectl get externalsecret -n argocd"
 else
-    echo -e "${BLUE}[14/14] Skipping repository credentials configuration (preview mode)${NC}"
+    echo -e "${BLUE}[15/15] Skipping repository credentials configuration (preview mode)${NC}"
 fi
 
 # Final cluster validation (optional)
