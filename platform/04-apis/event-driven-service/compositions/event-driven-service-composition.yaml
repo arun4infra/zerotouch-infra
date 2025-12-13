@@ -210,6 +210,7 @@ spec:
                 transforms:
                   - type: map
                     map:
+                      micro: "256Mi"
                       small: "512Mi"
                       medium: "1Gi"
                       large: "2Gi"
@@ -222,6 +223,7 @@ spec:
                 transforms:
                   - type: map
                     map:
+                      micro: "1Gi"
                       small: "2Gi"
                       medium: "4Gi"
                       large: "8Gi"

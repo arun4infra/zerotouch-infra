@@ -33,8 +33,9 @@ spec:
 
                 size:
                   type: string
-                  description: "Resource size allocation (small: 250m-1000m CPU, 512Mi-2Gi memory; medium: 500m-2000m CPU, 1Gi-4Gi memory; large: 1000m-4000m CPU, 2Gi-8Gi memory)"
+                  description: "Resource size allocation (micro: 100m-500m CPU, 256Mi-1Gi memory; small: 250m-1000m CPU, 512Mi-2Gi memory; medium: 500m-2000m CPU, 1Gi-4Gi memory; large: 1000m-4000m CPU, 2Gi-8Gi memory)"
                   enum:
+                    - micro
                     - small
                     - medium
                     - large
