@@ -1,17 +1,18 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: platform-root
+  name: eso-bootstrap
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   project: default
   source:
     repoURL: file:///repo
-    targetRevision: HEAD
-    path: bootstrap
+    path: bootstrap/components/preview
     directory:
       recurse: false
-      include: '{00-eso-bootstrap-preview,10-platform-bootstrap-preview,11-*}.yaml'  # Use preview bootstrap
+      include: '01-eso.yaml'
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
@@ -21,3 +22,4 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - ServerSideApply=true
