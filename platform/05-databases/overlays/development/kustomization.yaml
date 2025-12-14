@@ -4,7 +4,7 @@ kind: Kustomization
 
 # Reference the base which includes all database resources
 resources:
-  - ../..
+  - ../../base
 
 patches:
   # PostgreSQL storage class patch for Kind
