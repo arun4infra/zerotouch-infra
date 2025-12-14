@@ -224,27 +224,7 @@ echo -e "${YELLOW}[10/14] Verifying ESO...${NC}"
 echo -e "${YELLOW}[11/14] Verifying child applications...${NC}"
 "$SCRIPT_DIR/12-verify-child-apps.sh"
 
-# Step 12: Fix Kind conflicts (preview mode only)
-if [ "$MODE" = "preview" ]; then
-    echo -e "${YELLOW}[12/14] Fixing Kind deployment conflicts...${NC}"
-    
-    # Debug: Show NATS application as ArgoCD sees it
-    echo -e "${BLUE}DEBUG: NATS application spec as seen by ArgoCD:${NC}"
-    kubectl get application nats -n argocd -o yaml 2>/dev/null | grep -A 30 "spec:" || echo "NATS app not found"
-    
-    echo -e "${BLUE}DEBUG: NATS source file in container:${NC}"
-    KIND_CONTAINER=$(docker ps --filter "name=zerotouch-preview-control-plane" --format "{{.Names}}" 2>/dev/null || echo "")
-    if [ -n "$KIND_CONTAINER" ]; then
-        docker exec "$KIND_CONTAINER" cat /repo/bootstrap/components/01-nats.yaml 2>/dev/null | head -20 || echo "Cannot read file"
-    fi
-    
-    "$SCRIPT_DIR/helpers/fix-kind-conflicts.sh"
-    
-    # Force ArgoCD to refresh all applications to pick up patched values
-    echo -e "${BLUE}Forcing ArgoCD to refresh applications with patched values...${NC}"
-    kubectl patch application platform-bootstrap -n argocd --type=merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}' 2>/dev/null || true
-    sleep 5
-fi
+# Step 12: Skipped (no longer needed - storage class auto-detected)
 
 # Step 13: Wait for all apps to be healthy
 echo -e "${YELLOW}[13/15] Waiting for all applications to be healthy...${NC}"

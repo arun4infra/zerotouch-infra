@@ -199,14 +199,7 @@ else
     echo ""
 fi
 
-# Step 4.5: Pre-create NATS Application (preview mode only)
-# This must happen BEFORE the root app is deployed to avoid StatefulSet update conflicts
-if [ "$MODE" = "preview" ]; then
-    log_info ""
-    log_step "Step 4.5/7: Pre-creating NATS Application with correct storage class..."
-    "$SCRIPT_DIR/helpers/precreate-nats-preview.sh"
-    log_info "✓ NATS Application created (will be adopted by platform-bootstrap)"
-fi
+# Step 4.5: Skipped - NATS will be created by ArgoCD with default storage class
 
 # Step 5: Deploy root application
 log_info ""

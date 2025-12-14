@@ -41,14 +41,7 @@ echo -e "${BLUE}Applying preview patches...${NC}"
 # Pass --force since we're definitely in preview mode (cluster doesn't exist yet)
 "$SCRIPT_DIR/../patches/00-apply-all-patches.sh" --force
 
-# Verify patches were applied
-echo -e "${BLUE}Verifying patches before cluster creation...${NC}"
-if grep -q "storageClassName: standard" "$REPO_ROOT/bootstrap/components/01-nats.yaml"; then
-    echo -e "${GREEN}✓ NATS storageClassName patched to 'standard'${NC}"
-else
-    echo -e "${RED}✗ NATS storageClassName NOT patched!${NC}"
-    grep "storageClassName" "$REPO_ROOT/bootstrap/components/01-nats.yaml"
-fi
+# Patches applied - using default storage class (no verification needed)
 echo ""
 
 # 2. Update Kind config to mount local repo
