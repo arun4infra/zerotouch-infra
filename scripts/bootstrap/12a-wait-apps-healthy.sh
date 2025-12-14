@@ -164,6 +164,15 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
                 if [ -n "$PROGRESSING" ]; then
                     echo -e "       ${BLUE}Progressing resources:${NC}"
                     echo "$PROGRESSING"
+                else
+                    # No individual resources progressing - check app-level health message
+                    HEALTH_MSG=$(echo "$APP_JSON" | jq -r '.status.health.message // empty' 2>/dev/null)
+                    if [ -n "$HEALTH_MSG" ]; then
+                        echo -e "       ${BLUE}Health message: $HEALTH_MSG${NC}"
+                    fi
+                    # Show all resource health statuses for debugging
+                    echo -e "       ${BLUE}Resource health breakdown:${NC}"
+                    echo "$APP_JSON" | jq -r '.status.resources[]? | "         \(.kind)/\(.name): \(.health.status // "Unknown") - \(.health.message // "no message")"' 2>/dev/null | head -5
                 fi
             fi
             echo ""
