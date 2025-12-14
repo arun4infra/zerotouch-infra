@@ -69,9 +69,14 @@ check_postgres() {
     if [ "$total" -eq 0 ]; then
         # Check if PostgreSQL XRD exists (should be deployed)
         if kubectl_retry get xrd xpostgresinstances.database.bizmatters.io >/dev/null 2>&1; then
-            echo -e "   ${RED}PostgreSQL: XRD exists but no clusters deployed!${NC}"
-            echo -e "     ${YELLOW}Check: kubectl get postgresinstances --all-namespaces${NC}"
-            return 1  # XRD exists but no instances - this is a problem
+            if [ "$PREVIEW_MODE" = true ]; then
+                echo -e "   ${GREEN}PostgreSQL: XRD ready (instances created on-demand)${NC}"
+                return 0  # In preview mode, XRD existence is sufficient
+            else
+                echo -e "   ${RED}PostgreSQL: XRD exists but no clusters deployed!${NC}"
+                echo -e "     ${YELLOW}Check: kubectl get postgresinstances --all-namespaces${NC}"
+                return 1  # In production, we expect instances to exist
+            fi
         else
             echo -e "   ${YELLOW}PostgreSQL: XRD not found (not deployed in this platform)${NC}"
             return 0  # XRD doesn't exist - PostgreSQL not part of this deployment
@@ -117,9 +122,14 @@ check_dragonfly() {
     if [ "$total" -eq 0 ]; then
         # Check if Dragonfly XRD exists (should be deployed)
         if kubectl_retry get xrd xdragonflyinstances.database.bizmatters.io >/dev/null 2>&1; then
-            echo -e "   ${RED}Dragonfly: XRD exists but no caches deployed!${NC}"
-            echo -e "     ${YELLOW}Check: kubectl get dragonflyinstances --all-namespaces${NC}"
-            return 1  # XRD exists but no instances - this is a problem
+            if [ "$PREVIEW_MODE" = true ]; then
+                echo -e "   ${GREEN}Dragonfly: XRD ready (instances created on-demand)${NC}"
+                return 0  # In preview mode, XRD existence is sufficient
+            else
+                echo -e "   ${RED}Dragonfly: XRD exists but no caches deployed!${NC}"
+                echo -e "     ${YELLOW}Check: kubectl get dragonflyinstances --all-namespaces${NC}"
+                return 1  # In production, we expect instances to exist
+            fi
         else
             echo -e "   ${YELLOW}Dragonfly: XRD not found (not deployed in this platform)${NC}"
             return 0  # XRD doesn't exist - Dragonfly not part of this deployment
@@ -202,6 +212,11 @@ check_external_secrets() {
         
         # Skip tenant repository secrets (expected to fail in preview mode)
         if [[ "$name" == repo-* ]]; then
+            continue
+        fi
+        
+        # Skip aws-parameter-store in preview mode (optional secret)
+        if [ "$PREVIEW_MODE" = true ] && [[ "$name" == "aws-parameter-store" ]]; then
             continue
         fi
         
