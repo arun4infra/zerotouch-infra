@@ -2,9 +2,9 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# Reference the base which includes all database resources
 resources:
-  - ../../compositions/postgres-composition.yaml
-  - ../../compositions/dragonfly-composition.yaml
+  - ../..
 
 patches:
   # PostgreSQL storage class patch for Kind
