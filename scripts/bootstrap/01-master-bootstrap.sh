@@ -211,7 +211,17 @@ echo -e "${YELLOW}[11/14] Verifying child applications...${NC}"
 # Step 12: Fix Kind conflicts (preview mode only)
 if [ "$MODE" = "preview" ]; then
     echo -e "${YELLOW}[12/14] Fixing Kind deployment conflicts...${NC}"
+    
+    # Debug: Show NATS application as ArgoCD sees it
+    echo -e "${BLUE}DEBUG: NATS application spec as seen by ArgoCD:${NC}"
+    kubectl get application nats -n argocd -o yaml 2>/dev/null | grep -A 20 "spec:" || echo "NATS app not found"
+    
     "$SCRIPT_DIR/helpers/fix-kind-conflicts.sh"
+    
+    # Force ArgoCD to refresh all applications to pick up patched values
+    echo -e "${BLUE}Forcing ArgoCD to refresh applications with patched values...${NC}"
+    kubectl patch application platform-bootstrap -n argocd --type=merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}' 2>/dev/null || true
+    sleep 5
 fi
 
 # Step 13: Wait for all apps to be healthy

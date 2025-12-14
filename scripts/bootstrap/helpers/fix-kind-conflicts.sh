@@ -19,6 +19,64 @@ echo -e "${BLUE}║   Fixing Kind Cluster Deployment Conflicts                  
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
+# Fix 0: Preemptively delete NATS application to force recreation with patched values
+echo -e "${BLUE}Checking if NATS application needs recreation...${NC}"
+if kubectl get application nats -n argocd &>/dev/null; then
+    echo -e "${YELLOW}  ⚠ NATS application exists - checking if it needs recreation${NC}"
+    
+    # Check if NATS namespace has resources
+    if kubectl get namespace nats &>/dev/null; then
+        # Check PVC storage class
+        if kubectl get pvc nats-js-nats-0 -n nats &>/dev/null; then
+            NATS_SC=$(kubectl get pvc nats-js-nats-0 -n nats -o jsonpath='{.spec.storageClassName}' 2>/dev/null || echo "")
+            if [ "$NATS_SC" = "local-path" ]; then
+                echo -e "${YELLOW}  ⚠ NATS PVC has wrong storage class: $NATS_SC${NC}"
+                echo -e "${BLUE}  Deleting NATS application and namespace for clean recreation...${NC}"
+                
+                # Delete application first (stops ArgoCD from recreating resources)
+                kubectl delete application nats -n argocd --wait=false 2>/dev/null || true
+                
+                # Delete namespace (cascades to all resources)
+                kubectl delete namespace nats --wait=false 2>/dev/null || true
+                
+                # Wait for deletion
+                echo -e "${BLUE}  Waiting for cleanup (max 60s)...${NC}"
+                for i in {1..60}; do
+                    if ! kubectl get namespace nats &>/dev/null; then
+                        echo -e "${GREEN}  ✓ NATS namespace deleted${NC}"
+                        break
+                    fi
+                    sleep 1
+                done
+                
+                # Force platform-bootstrap to recreate NATS with patched values
+                echo -e "${BLUE}  Triggering platform-bootstrap refresh...${NC}"
+                kubectl patch application platform-bootstrap -n argocd --type=merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}' 2>/dev/null || true
+                
+                # Wait for NATS app to be recreated
+                echo -e "${BLUE}  Waiting for NATS application recreation...${NC}"
+                for i in {1..30}; do
+                    if kubectl get application nats -n argocd &>/dev/null; then
+                        echo -e "${GREEN}  ✓ NATS application recreated${NC}"
+                        break
+                    fi
+                    sleep 2
+                done
+                
+                echo -e "${GREEN}  ✓ NATS will be recreated with correct storage class${NC}"
+            else
+                echo -e "${GREEN}  ✓ NATS PVC has correct storage class: ${NATS_SC}${NC}"
+            fi
+        else
+            echo -e "${BLUE}  NATS PVC not yet created${NC}"
+        fi
+    else
+        echo -e "${BLUE}  NATS namespace doesn't exist yet${NC}"
+    fi
+else
+    echo -e "${BLUE}  NATS application doesn't exist yet${NC}"
+fi
+
 # Fix 1: local-path-provisioner - SKIP deletion
 # Kind comes with its own local-path-provisioner that works fine.
 # We no longer deploy our own via ArgoCD in preview mode, so no conflict.
