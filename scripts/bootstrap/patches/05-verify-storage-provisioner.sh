@@ -1,7 +1,7 @@
 #!/bin/bash
 # Verify storage provisioner for Kind clusters
 # Note: Kind v1.34+ doesn't install local-path-provisioner by default
-# We rely on ArgoCD to deploy it via 01-local-path-provisioner.yaml
+# We rely on ArgoCD to deploy it via 00-local-path-provisioner.yaml
 
 set -e
 
@@ -37,7 +37,7 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
         echo -e "  ${GREEN}✓${NC} Kind's built-in local-path-provisioner found in kube-system (replicas: $REPLICAS)"
         
         # Disable our ArgoCD Application to avoid conflicts
-        LOCAL_PATH_APP="$REPO_ROOT/bootstrap/components/01-local-path-provisioner.yaml"
+        LOCAL_PATH_APP="$REPO_ROOT/bootstrap/00-local-path-provisioner.yaml"
         if [ -f "$LOCAL_PATH_APP" ]; then
             mv "$LOCAL_PATH_APP" "$LOCAL_PATH_APP.disabled"
             echo -e "  ${BLUE}ℹ${NC} Disabled ArgoCD Application to avoid conflict with Kind's provisioner"
@@ -46,15 +46,15 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
         echo -e "  ${BLUE}ℹ${NC} Kind's built-in provisioner not found (Kind v1.34+ doesn't include it)"
         
         # Re-enable our ArgoCD Application if it was disabled
-        LOCAL_PATH_APP_DISABLED="$REPO_ROOT/bootstrap/01-local-path-provisioner.yaml.disabled"
+        LOCAL_PATH_APP_DISABLED="$REPO_ROOT/bootstrap/00-local-path-provisioner.yaml.disabled"
         if [ -f "$LOCAL_PATH_APP_DISABLED" ]; then
             mv "$LOCAL_PATH_APP_DISABLED" "${LOCAL_PATH_APP_DISABLED%.disabled}"
             echo -e "  ${GREEN}✓${NC} Re-enabled ArgoCD Application for local-path-provisioner"
         else
             # Check both locations (bootstrap/ and bootstrap/components/)
-            if [ -f "$REPO_ROOT/bootstrap/01-local-path-provisioner.yaml" ]; then
+            if [ -f "$REPO_ROOT/bootstrap/00-local-path-provisioner.yaml" ]; then
                 echo -e "  ${BLUE}ℹ${NC} ArgoCD Application is enabled: $REPO_ROOT/bootstrap/01-local-path-provisioner.yaml"
-            elif [ -f "$REPO_ROOT/bootstrap/01-local-path-provisioner.yaml" ]; then
+            elif [ -f "$REPO_ROOT/bootstrap/00-local-path-provisioner.yaml" ]; then
                 echo -e "  ${BLUE}ℹ${NC} ArgoCD Application is enabled: $REPO_ROOT/bootstrap/components/01-local-path-provisioner.yaml"
             else
                 echo -e "  ${YELLOW}⚠${NC} ArgoCD Application file not found in expected locations"
