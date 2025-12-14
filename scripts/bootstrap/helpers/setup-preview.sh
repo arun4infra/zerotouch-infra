@@ -36,20 +36,12 @@ echo ""
 echo -e "${BLUE}Preview mode configured${NC}"
 echo ""
 
-# 1. Verify Kustomize overlays are ready (industry standard approach)
-echo -e "${BLUE}Verifying Kustomize overlay structure...${NC}"
+# 1. Apply preview patches (URLs, storage class, tolerations)
+echo -e "${BLUE}Applying preview patches...${NC}"
+"$SCRIPT_DIR/../patches/00-apply-all-patches.sh"
+echo ""
 
-if [[ ! -d "$REPO_ROOT/platform/05-databases/overlays/development" ]]; then
-    echo -e "${YELLOW}Development overlay not found - will use runtime patching as fallback${NC}"
-else
-    echo -e "${GREEN}✓ Kustomize overlays ready (no runtime patching needed)${NC}"
-fi
-
-# 2. Update ArgoCD Applications to use local file:// URLs instead of GitHub
-# NOTE: Commented out as preview files already have correct file:// URLs pre-configured
-# "$SCRIPT_DIR/ensure-preview-urls.sh" --force
-
-# 3. Update Kind config to mount local repo
+# 2. Update Kind config to mount local repo
 echo -e "${BLUE}Updating Kind config to mount local repo...${NC}"
 
 cat > "$KIND_CONFIG" << EOF

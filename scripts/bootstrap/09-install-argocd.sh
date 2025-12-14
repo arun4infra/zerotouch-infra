@@ -23,12 +23,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # Parse mode parameter
 MODE="${1:-auto}"
 
-# Set root application path based on mode
-if [ "$MODE" = "preview" ]; then
-    ROOT_APP_PATH="bootstrap/root-preview.yaml"
-else
-    ROOT_APP_PATH="bootstrap/root.yaml"
-fi
+# Root application path (same for both modes - patches handle the differences)
+ROOT_APP_PATH="bootstrap/root.yaml"
 
 # Function to print colored messages
 log_info() {
