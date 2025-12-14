@@ -423,3 +423,217 @@ print_debug_commands() {
     echo "  kubectl get storageclass"
     echo ""
 }
+
+# ============================================================================
+# CLUSTER-WIDE DIAGNOSTICS
+# ============================================================================
+
+# Show cluster resource status overview
+# Usage: show_cluster_status
+show_cluster_status() {
+    echo -e "${BLUE}Cluster resource status:${NC}"
+    
+    echo -e "  ${YELLOW}Nodes:${NC}"
+    kubectl_retry get nodes -o wide 2>/dev/null | while read -r node; do
+        echo -e "    $node"
+    done || echo -e "    ${YELLOW}Could not get nodes${NC}"
+    
+    echo -e "  ${YELLOW}Storage classes:${NC}"
+    kubectl_retry get storageclass 2>/dev/null | while read -r sc; do
+        echo -e "    $sc"
+    done || echo -e "    ${YELLOW}Could not get storage classes${NC}"
+    
+    echo -e "  ${YELLOW}Node resource usage:${NC}"
+    kubectl_retry top nodes 2>/dev/null | while read -r usage; do
+        echo -e "    $usage"
+    done || echo -e "    ${YELLOW}Metrics not available${NC}"
+    
+    echo ""
+}
+
+# Show detailed PostgreSQL diagnostics
+# Usage: show_postgres_details <namespace> <cluster_name>
+show_postgres_details() {
+    local namespace="$1"
+    local cluster_name="$2"
+    
+    echo -e "     ${YELLOW}PostgreSQL cluster details:${NC}"
+    local cluster_json=$(kubectl_retry get clusters.postgresql.cnpg.io "$cluster_name" -n "$namespace" -o json 2>/dev/null)
+    if [ -n "$cluster_json" ]; then
+        echo "$cluster_json" | jq -r '"       Phase: \(.status.phase)\n       Instances: \(.status.readyInstances)/\(.status.instances)\n       Conditions: \(.status.conditions // [] | map("\(.type)=\(.status): \(.message)") | join(", "))"' 2>/dev/null || echo -e "       ${YELLOW}Could not parse cluster details${NC}"
+    fi
+    
+    echo -e "     ${YELLOW}PostgreSQL pod status:${NC}"
+    kubectl_retry get pods -n "$namespace" -l cnpg.io/cluster="$cluster_name" -o wide 2>/dev/null | head -10 | while read -r pod; do
+        echo -e "       $pod"
+    done || echo -e "       ${YELLOW}No PostgreSQL pods found${NC}"
+    
+    # Show detailed pod info for pending/failed pods
+    local problem_pods=$(kubectl_retry get pods -n "$namespace" -l cnpg.io/cluster="$cluster_name" --field-selector=status.phase!=Running,status.phase!=Succeeded -o json 2>/dev/null)
+    if [ -n "$problem_pods" ] && [ "$(echo "$problem_pods" | jq -r '.items | length')" -gt 0 ]; then
+        echo -e "     ${YELLOW}Problem pod details:${NC}"
+        echo "$problem_pods" | jq -r '.items[] | "       Pod: \(.metadata.name)\n       Phase: \(.status.phase)\n       Reason: \(.status.reason // "N/A")\n       Message: \(.status.message // "N/A")\n       Conditions: \(.status.conditions // [] | map("\(.type)=\(.status): \(.reason)") | join(", "))"' 2>/dev/null | head -20 || echo -e "       ${YELLOW}Could not parse pod details${NC}"
+    fi
+}
+
+# Show detailed PVC diagnostics
+# Usage: show_pvc_details <namespace> <label_selector>
+show_pvc_details() {
+    local namespace="$1"
+    local label_selector="$2"
+    
+    echo -e "     ${YELLOW}PVC status:${NC}"
+    kubectl_retry get pvc -n "$namespace" ${label_selector:+-l "$label_selector"} 2>/dev/null | head -5 | while read -r pvc; do
+        echo -e "       $pvc"
+    done || echo -e "       ${YELLOW}No PVCs found${NC}"
+    
+    # Show detailed PVC info for pending PVCs
+    local pending_pvcs=$(kubectl_retry get pvc -n "$namespace" ${label_selector:+-l "$label_selector"} --field-selector=status.phase=Pending -o json 2>/dev/null)
+    if [ -n "$pending_pvcs" ] && [ "$(echo "$pending_pvcs" | jq -r '.items | length')" -gt 0 ]; then
+        echo -e "     ${YELLOW}Pending PVC details:${NC}"
+        echo "$pending_pvcs" | jq -r '.items[] | "       PVC: \(.metadata.name)\n       StorageClass: \(.spec.storageClassName)\n       Status: \(.status.phase)\n       Conditions: \(.status.conditions // [] | map("\(.type)=\(.status): \(.message)") | join(", "))"' 2>/dev/null || echo -e "       ${YELLOW}Could not parse PVC details${NC}"
+    fi
+}
+
+# Show detailed pod diagnostics
+# Usage: show_pod_details <namespace> <label_selector>
+show_pod_details() {
+    local namespace="$1"
+    local label_selector="$2"
+    
+    echo -e "     ${YELLOW}Pod status:${NC}"
+    kubectl_retry get pods -n "$namespace" ${label_selector:+-l "$label_selector"} -o wide 2>/dev/null | head -10 | while read -r pod; do
+        echo -e "       $pod"
+    done || echo -e "       ${YELLOW}No pods found${NC}"
+}
+
+# Show detailed NATS diagnostics
+# Usage: show_nats_details <namespace>
+show_nats_details() {
+    local namespace="$1"
+    
+    echo -e "     ${YELLOW}NATS pod status:${NC}"
+    kubectl_retry get pods -n "$namespace" -l app.kubernetes.io/name=nats -o wide 2>/dev/null | head -5 | while read -r pod; do
+        echo -e "       $pod"
+    done || echo -e "       ${YELLOW}No pods found${NC}"
+    
+    # Show detailed pod info
+    local nats_pods=$(kubectl_retry get pods -n "$namespace" -l app.kubernetes.io/name=nats -o json 2>/dev/null)
+    if [ -n "$nats_pods" ] && [ "$(echo "$nats_pods" | jq -r '.items | length')" -gt 0 ]; then
+        echo -e "     ${YELLOW}Detailed pod info:${NC}"
+        echo "$nats_pods" | jq -r '.items[] | "       Pod: \(.metadata.name)\n       Phase: \(.status.phase)\n       Containers: \(.status.containerStatuses // [] | map("\(.name): ready=\(.ready), restarts=\(.restartCount)") | join(", "))\n       Conditions: \(.status.conditions // [] | map("\(.type)=\(.status)") | join(", "))"' 2>/dev/null | head -20
+    fi
+    
+    # Show waiting containers
+    local waiting=$(kubectl get pods -n "$namespace" -o json 2>/dev/null | \
+        jq -r '.items[]? | select(.status.containerStatuses[]?.ready == false) | 
+        "       \(.metadata.name): \(.status.containerStatuses[]? | select(.ready == false) | .state | to_entries[0] | "\(.key): \(.value.reason // .value.message // "waiting")")"' 2>/dev/null | head -3)
+    [ -n "$waiting" ] && echo -e "     ${YELLOW}Waiting containers:${NC}" && echo "$waiting"
+    
+    # Show PVC status
+    show_pvc_details "$namespace" ""
+    
+    # Show all recent events
+    echo -e "     ${YELLOW}All recent events:${NC}"
+    kubectl_retry get events -n "$namespace" --sort-by='.lastTimestamp' 2>/dev/null | tail -10 | while read -r event; do
+        echo -e "       $event"
+    done || echo -e "       ${YELLOW}No events found${NC}"
+}
+
+# Show storage class information
+# Usage: show_storage_classes
+show_storage_classes() {
+    echo -e "     ${YELLOW}Storage classes:${NC}"
+    kubectl_retry get storageclass 2>/dev/null | while read -r sc; do
+        echo -e "       $sc"
+    done || echo -e "       ${YELLOW}Could not get storage classes${NC}"
+}
+
+# Show recent events with filtering
+# Usage: show_recent_events <namespace> <grep_pattern> <count>
+show_recent_events() {
+    local namespace="$1"
+    local pattern="$2"
+    local count="${3:-10}"
+    
+    echo -e "     ${YELLOW}Recent events:${NC}"
+    if [ "$namespace" = "--all-namespaces" ]; then
+        kubectl_retry get events --all-namespaces --sort-by='.lastTimestamp' 2>/dev/null | grep -iE "$pattern" | tail -"$count" | while read -r event; do
+            echo -e "       $event"
+        done || echo -e "       ${YELLOW}No recent events found${NC}"
+    else
+        kubectl_retry get events -n "$namespace" --sort-by='.lastTimestamp' 2>/dev/null | grep -iE "$pattern" | tail -"$count" | while read -r event; do
+            echo -e "       $event"
+        done || echo -e "       ${YELLOW}No recent events found${NC}"
+    fi
+}
+
+# ============================================================================
+# TIMEOUT DIAGNOSTICS (COMPREHENSIVE)
+# ============================================================================
+
+# Show comprehensive diagnostics on timeout
+# Usage: show_timeout_diagnostics
+show_timeout_diagnostics() {
+    echo ""
+    echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║   DETAILED DIAGNOSTICS                                       ║${NC}"
+    echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    
+    echo -e "${BLUE}PostgreSQL Clusters:${NC}"
+    kubectl_retry get clusters.postgresql.cnpg.io --all-namespaces -o wide 2>/dev/null || echo "No PostgreSQL clusters found"
+    echo ""
+    
+    echo -e "${BLUE}PostgreSQL Cluster Details:${NC}"
+    kubectl_retry get clusters.postgresql.cnpg.io --all-namespaces -o json 2>/dev/null | jq -r '.items[] | "Cluster: \(.metadata.namespace)/\(.metadata.name)\nPhase: \(.status.phase)\nInstances: \(.status.readyInstances)/\(.status.instances)\nConditions: \(.status.conditions // [] | map("\(.type)=\(.status): \(.message)") | join(", "))\n"' 2>/dev/null || echo "Could not get cluster details"
+    echo ""
+    
+    echo -e "${BLUE}PostgreSQL Pods:${NC}"
+    kubectl_retry get pods --all-namespaces -l cnpg.io/cluster -o wide 2>/dev/null || echo "No PostgreSQL pods found"
+    echo ""
+    
+    echo -e "${BLUE}PostgreSQL PVCs:${NC}"
+    kubectl_retry get pvc --all-namespaces -l cnpg.io/cluster -o wide 2>/dev/null || echo "No PostgreSQL PVCs found"
+    echo ""
+    
+    echo -e "${BLUE}Dragonfly Caches:${NC}"
+    kubectl_retry get statefulsets --all-namespaces -l app=dragonfly -o wide 2>/dev/null || echo "No Dragonfly caches found"
+    echo ""
+    
+    echo -e "${BLUE}Dragonfly Pods:${NC}"
+    kubectl_retry get pods --all-namespaces -l app=dragonfly -o wide 2>/dev/null || echo "No Dragonfly pods found"
+    echo ""
+    
+    echo -e "${BLUE}NATS Messaging:${NC}"
+    kubectl_retry get statefulset nats -n nats -o wide 2>/dev/null || echo "No NATS found"
+    echo ""
+    
+    echo -e "${BLUE}NATS Pods:${NC}"
+    kubectl_retry get pods -n nats -l app.kubernetes.io/name=nats -o wide 2>/dev/null || echo "No NATS pods found"
+    echo ""
+    
+    echo -e "${BLUE}External Secrets:${NC}"
+    kubectl_retry get externalsecrets --all-namespaces -o wide 2>/dev/null || echo "No ExternalSecrets found"
+    echo ""
+    
+    echo -e "${BLUE}ClusterSecretStore Status:${NC}"
+    kubectl_retry get clustersecretstore aws-parameter-store -o jsonpath='{.status}' 2>/dev/null | jq '.' 2>/dev/null || echo "ClusterSecretStore not found or invalid"
+    echo ""
+    
+    echo -e "${BLUE}All PVCs in cluster:${NC}"
+    kubectl_retry get pvc --all-namespaces -o wide 2>/dev/null || echo "No PVCs found"
+    echo ""
+    
+    echo -e "${BLUE}Pending PVCs (detailed):${NC}"
+    kubectl_retry get pvc --all-namespaces --field-selector=status.phase=Pending -o json 2>/dev/null | jq -r '.items[] | "PVC: \(.metadata.namespace)/\(.metadata.name)\nStorageClass: \(.spec.storageClassName)\nStatus: \(.status.phase)\nRequested: \(.spec.resources.requests.storage)\nAccessModes: \(.spec.accessModes | join(", "))\nVolumeMode: \(.spec.volumeMode)\n"' 2>/dev/null || echo "No pending PVCs or could not parse"
+    echo ""
+    
+    echo -e "${BLUE}Recent Events (last 20):${NC}"
+    kubectl_retry get events --all-namespaces --sort-by='.lastTimestamp' | tail -20 2>/dev/null || echo "No events found"
+    echo ""
+    
+    echo -e "${BLUE}ArgoCD Application Status:${NC}"
+    kubectl_retry get applications -n argocd -o wide 2>/dev/null || echo "No ArgoCD applications found"
+    echo ""
+}

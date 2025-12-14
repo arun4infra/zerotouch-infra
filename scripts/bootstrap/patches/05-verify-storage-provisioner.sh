@@ -1,7 +1,8 @@
 #!/bin/bash
 # Verify storage provisioner for Kind clusters
-# Note: Kind v1.34+ doesn't install local-path-provisioner by default
-# We rely on ArgoCD to deploy it via 00-local-path-provisioner.yaml
+# Note: Kind v1.34+ includes built-in local-path-provisioner
+# We disable our ArgoCD app (00-local-path-provisioner.yaml) to avoid conflicts
+# and create a 'local-path' storage class alias if needed
 
 set -e
 

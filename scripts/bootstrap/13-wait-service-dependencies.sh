@@ -99,17 +99,11 @@ check_postgres() {
             echo -e "       ${RED}✗ $detail${NC}"
         done
         
-        # Show PVC status (common issue)
-        echo -e "     ${YELLOW}PVC status:${NC}"
-        kubectl_retry get pvc --all-namespaces -l cnpg.io/cluster 2>/dev/null | head -5 | while read -r pvc; do
-            echo -e "       $pvc"
-        done || echo -e "       ${YELLOW}No PVCs found${NC}"
-        
-        # Show recent events for troubleshooting
-        echo -e "     ${YELLOW}Recent events:${NC}"
-        kubectl_retry get events --all-namespaces --sort-by='.lastTimestamp' 2>/dev/null | grep -iE "postgresql|cnpg|pvc|volume|provision" | tail -3 | while read -r event; do
-            echo -e "       $event"
-        done || echo -e "       ${YELLOW}No recent events found${NC}"
+        # Use shared diagnostic functions
+        show_pvc_details "" "cnpg.io/cluster"
+        show_postgres_details "$(echo "${unhealthy_details[0]}" | cut -d'/' -f1)" "$(echo "${unhealthy_details[0]}" | cut -d'/' -f2 | cut -d':' -f1)"
+        show_storage_classes
+        show_recent_events "--all-namespaces" "postgresql|cnpg|pvc|volume|provision|schedule" 10
     fi
     
     [ "$healthy" -eq "$total" ]
@@ -159,17 +153,10 @@ check_dragonfly() {
             echo -e "       ${RED}✗ $detail${NC}"
         done
         
-        # Show PVC status (common issue)
-        echo -e "     ${YELLOW}PVC status:${NC}"
-        kubectl_retry get pvc --all-namespaces -l app=dragonfly 2>/dev/null | head -5 | while read -r pvc; do
-            echo -e "       $pvc"
-        done || echo -e "       ${YELLOW}No PVCs found${NC}"
-        
-        # Show recent events for troubleshooting
-        echo -e "     ${YELLOW}Recent events:${NC}"
-        kubectl_retry get events --all-namespaces --sort-by='.lastTimestamp' 2>/dev/null | grep -iE "dragonfly|pvc|volume|provision" | tail -3 | while read -r event; do
-            echo -e "       $event"
-        done || echo -e "       ${YELLOW}No recent events found${NC}"
+        # Use shared diagnostic functions
+        show_pvc_details "" "app=dragonfly"
+        show_pod_details "" "app=dragonfly"
+        show_recent_events "--all-namespaces" "dragonfly|pvc|volume|provision|schedule" 10
     fi
     
     [ "$ready" -eq "$total" ]
@@ -188,36 +175,10 @@ check_nats() {
     
     if [ "$ready" -ne "$total" ]; then
         echo -e "     ${RED}NATS not ready:${NC}"
+        echo -e "       ${RED}✗ nats/nats: $ready/$total replicas${NC}"
         
-        # Use shared diagnostics if available
-        if type diagnose_nats &>/dev/null; then
-            diagnose_nats "nats"
-        else
-            echo -e "       ${RED}✗ nats/nats: $ready/$total replicas${NC}"
-            
-            # Show pod status with container details
-            echo -e "     ${YELLOW}Pod status:${NC}"
-            kubectl_retry get pods -n nats -l app.kubernetes.io/name=nats -o wide 2>/dev/null | head -5 | while read -r pod; do
-                echo -e "       $pod"
-            done || echo -e "       ${YELLOW}No pods found${NC}"
-            
-            # Show waiting containers
-            WAITING=$(kubectl get pods -n nats -o json 2>/dev/null | \
-                jq -r '.items[]? | select(.status.containerStatuses[]?.ready == false) | 
-                "       \(.metadata.name): \(.status.containerStatuses[]? | select(.ready == false) | .state | to_entries[0] | "\(.key): \(.value.reason // .value.message // "waiting")")"' 2>/dev/null | head -3)
-            [ -n "$WAITING" ] && echo -e "     ${YELLOW}Waiting containers:${NC}" && echo "$WAITING"
-            
-            # Show PVC status
-            echo -e "     ${YELLOW}PVC status:${NC}"
-            kubectl_retry get pvc -n nats 2>/dev/null | head -5 | while read -r pvc; do
-                echo -e "       $pvc"
-            done || echo -e "       ${YELLOW}No PVCs found${NC}"
-            
-            # Show recent warning events
-            EVENTS=$(kubectl get events -n nats --field-selector type=Warning --sort-by='.lastTimestamp' -o json 2>/dev/null | \
-                jq -r '.items[-5:][]? | "       \(.involvedObject.kind)/\(.involvedObject.name): \(.reason) - \(.message | .[0:80])"' 2>/dev/null)
-            [ -n "$EVENTS" ] && echo -e "     ${YELLOW}Recent warnings:${NC}" && echo "$EVENTS"
-        fi
+        # Use shared diagnostic function
+        show_nats_details "nats"
     fi
     
     [ "$ready" -eq "$total" ]
@@ -286,6 +247,9 @@ if [ "$PREVIEW_MODE" = true ]; then
 fi
 echo ""
 
+# Show cluster resource status upfront
+show_cluster_status
+
 ELAPSED=0
 while [ $ELAPSED -lt $TIMEOUT ]; do
     echo -e "${YELLOW}⏳ Checking services ($((ELAPSED/60))m $((ELAPSED%60))s elapsed)...${NC}"
@@ -336,29 +300,8 @@ echo ""
 echo -e "${YELLOW}=== DETAILED DIAGNOSTICS ===${NC}"
 echo ""
 
-echo -e "${BLUE}PostgreSQL Clusters:${NC}"
-kubectl_retry get clusters.postgresql.cnpg.io --all-namespaces -o wide 2>/dev/null || echo "No PostgreSQL clusters found"
-echo ""
-
-echo -e "${BLUE}Dragonfly Caches:${NC}"
-kubectl_retry get statefulsets --all-namespaces -l app=dragonfly -o wide 2>/dev/null || echo "No Dragonfly caches found"
-echo ""
-
-echo -e "${BLUE}NATS Messaging:${NC}"
-kubectl_retry get statefulset nats -n nats -o wide 2>/dev/null || echo "No NATS found"
-echo ""
-
-echo -e "${BLUE}External Secrets:${NC}"
-kubectl_retry get externalsecrets --all-namespaces -o wide 2>/dev/null || echo "No ExternalSecrets found"
-echo ""
-
-echo -e "${BLUE}ClusterSecretStore Status:${NC}"
-kubectl_retry get clustersecretstore aws-parameter-store -o jsonpath='{.status}' 2>/dev/null | jq '.' 2>/dev/null || echo "ClusterSecretStore not found or invalid"
-echo ""
-
-echo -e "${BLUE}Recent Events (last 10):${NC}"
-kubectl_retry get events --all-namespaces --sort-by='.lastTimestamp' | tail -10 2>/dev/null || echo "No events found"
-echo ""
+# Use shared comprehensive timeout diagnostics
+show_timeout_diagnostics
 
 echo -e "${YELLOW}Manual debug commands:${NC}"
 echo "  kubectl get clusters.postgresql.cnpg.io --all-namespaces -o wide"
