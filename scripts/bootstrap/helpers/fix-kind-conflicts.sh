@@ -31,7 +31,52 @@ else
     echo -e "${YELLOW}  ⚠ local-path-provisioner not found - storage may not work${NC}"
 fi
 
-# Fix 2: Check for other common Kind conflicts
+# Fix 2: Clean up PVCs with wrong storage class
+# If a PVC was created with 'local-path' but we need 'standard', delete it
+# so it can be recreated with the correct storage class
+echo -e "${BLUE}Checking for PVCs with wrong storage class...${NC}"
+
+# Check NATS PVC specifically
+if kubectl get pvc nats-js-nats-0 -n nats &>/dev/null; then
+    NATS_SC=$(kubectl get pvc nats-js-nats-0 -n nats -o jsonpath='{.spec.storageClassName}' 2>/dev/null || echo "")
+    if [ "$NATS_SC" = "local-path" ]; then
+        echo -e "${YELLOW}  ⚠ Found NATS PVC with wrong storage class: $NATS_SC${NC}"
+        echo -e "${BLUE}  Deleting PVC so it can be recreated with 'standard' storage class...${NC}"
+        
+        # Delete the StatefulSet first to release the PVC
+        kubectl delete statefulset nats -n nats --ignore-not-found=true --wait=false 2>/dev/null || true
+        
+        # Delete the PVC
+        kubectl delete pvc nats-js-nats-0 -n nats --ignore-not-found=true 2>/dev/null || true
+        
+        # Wait for PVC to be deleted (max 30 seconds)
+        echo -e "${BLUE}  Waiting for PVC to be deleted...${NC}"
+        for i in {1..30}; do
+            if ! kubectl get pvc nats-js-nats-0 -n nats &>/dev/null; then
+                echo -e "${GREEN}  ✓ PVC deleted${NC}"
+                break
+            fi
+            sleep 1
+        done
+        
+        # Force ArgoCD to re-sync the NATS application
+        if kubectl get application nats -n argocd &>/dev/null; then
+            echo -e "${BLUE}  Triggering ArgoCD re-sync for NATS...${NC}"
+            kubectl patch application nats -n argocd --type=merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}' 2>/dev/null || true
+            
+            # Also trigger a sync operation
+            kubectl patch application nats -n argocd --type=merge -p '{"operation":{"initiatedBy":{"username":"fix-kind-conflicts"},"sync":{"revision":"HEAD"}}}' 2>/dev/null || true
+        fi
+        
+        echo -e "${GREEN}  ✓ NATS PVC cleanup complete - will be recreated with correct storage class${NC}"
+    else
+        echo -e "${GREEN}  ✓ NATS PVC has correct storage class: ${NATS_SC:-standard}${NC}"
+    fi
+else
+    echo -e "${BLUE}  NATS PVC not yet created (will be created with correct storage class)${NC}"
+fi
+
+# Fix 3: Check for other common Kind conflicts
 echo -e "${BLUE}Checking for other Kind deployment conflicts...${NC}"
 
 # List of common Kind deployments that might conflict
