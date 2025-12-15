@@ -186,6 +186,7 @@ spec:
                 transforms:
                   - type: map
                     map:
+                      micro: "100m"
                       small: "250m"
                       medium: "500m"
                       large: "1000m"
@@ -198,6 +199,7 @@ spec:
                 transforms:
                   - type: map
                     map:
+                      micro: "500m"
                       small: "1000m"
                       medium: "2000m"
                       large: "4000m"
