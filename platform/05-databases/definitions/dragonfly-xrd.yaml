@@ -10,6 +10,10 @@ spec:
   claimNames:
     kind: DragonflyInstance
     plural: dragonflyinstances
+  connectionSecretKeys:
+    - endpoint
+    - port
+    - password
   versions:
     - name: v1alpha1
       served: true
@@ -23,8 +27,9 @@ spec:
               properties:
                 size:
                   type: string
-                  description: "Size of the cache instance (small, medium, large)"
+                  description: "Size of the cache instance (micro, small, medium, large)"
                   enum:
+                    - micro
                     - small
                     - medium
                     - large

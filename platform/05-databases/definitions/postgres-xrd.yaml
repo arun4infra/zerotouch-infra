@@ -10,6 +10,12 @@ spec:
   claimNames:
     kind: PostgresInstance
     plural: postgresinstances
+  connectionSecretKeys:
+    - endpoint
+    - port
+    - username
+    - password
+    - database
   versions:
     - name: v1alpha1
       served: true
@@ -23,8 +29,9 @@ spec:
               properties:
                 size:
                   type: string
-                  description: "Size of the database instance (small, medium, large)"
+                  description: "Size of the database instance (micro, small, medium, large)"
                   enum:
+                    - micro
                     - small
                     - medium
                     - large
