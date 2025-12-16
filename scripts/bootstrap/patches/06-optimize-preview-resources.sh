@@ -43,10 +43,8 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     if [ -f "$NATS_FILE" ]; then
         # Disable JetStream file store (uses PVCs)
         if grep -q "enabled: true" "$NATS_FILE" 2>/dev/null; then
-            # Disable fileStore PVC
-            sed -i.bak '/fileStore:/,/pvc:/{s/enabled: true/enabled: false/}' "$NATS_FILE"
-            # Keep memoryStore enabled for in-memory streams
-            sed -i.bak '/memoryStore:/,/maxSize:/{s/enabled: false/enabled: true/}' "$NATS_FILE"
+            # Disable fileStore PVC - simpler approach that works on both Linux and macOS
+            sed -i.bak 's/enabled: true/enabled: false/g' "$NATS_FILE"
             rm -f "$NATS_FILE.bak"
             echo -e "  ${GREEN}✓${NC} Disabled NATS persistence (using memory-only mode)"
         fi

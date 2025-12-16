@@ -47,9 +47,15 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     # Kind already provides local-path storage
     if ! grep -q "exclude:" "$ROOT_YAML" 2>/dev/null; then
         # No exclude pattern exists, add it after include line
-        sed -i.bak "/include:/a\\
-      exclude: '00-local-path-provisioner.yaml'" "$ROOT_YAML"
-        rm -f "$ROOT_YAML.bak"
+        # Use awk to properly insert the exclude line while preserving structure
+        awk '
+        /include:/ { 
+            print $0
+            print "      exclude: '\''00-local-path-provisioner.yaml'\''"
+            next
+        }
+        { print }
+        ' "$ROOT_YAML" > "$ROOT_YAML.tmp" && mv "$ROOT_YAML.tmp" "$ROOT_YAML"
         echo -e "  ${GREEN}✓${NC} Added exclude pattern for local-path-provisioner"
     elif ! grep -q "exclude:.*00-local-path-provisioner" "$ROOT_YAML" 2>/dev/null; then
         # Exclude exists but doesn't include local-path-provisioner
