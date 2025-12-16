@@ -76,7 +76,7 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     # Check root.yaml
     ROOT_YAML="$REPO_ROOT/bootstrap/root.yaml"
     if [ -f "$ROOT_YAML" ]; then
-        if grep -q "$GITHUB_URL" "$ROOT_YAML" 2>/dev/null; then
+        if grep -qE "$GITHUB_URL_PATTERN" "$ROOT_YAML" 2>/dev/null; then
             echo -e "  ${RED}✗ root.yaml still contains GitHub URL!${NC}"
             grep -n "repoURL" "$ROOT_YAML" || true
         else
@@ -94,7 +94,7 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     PLATFORM_YAML="$REPO_ROOT/bootstrap/10-platform-bootstrap.yaml"
     if [ -f "$PLATFORM_YAML" ]; then
         echo -e "${BLUE}Checking 10-platform-bootstrap.yaml...${NC}"
-        if grep -q "$GITHUB_URL" "$PLATFORM_YAML" 2>/dev/null; then
+        if grep -qE "$GITHUB_URL_PATTERN" "$PLATFORM_YAML" 2>/dev/null; then
             echo -e "  ${RED}✗ 10-platform-bootstrap.yaml still contains GitHub URL!${NC}"
             grep -n "repoURL" "$PLATFORM_YAML" || true
         else
@@ -105,7 +105,7 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     
     # List all files that still contain GitHub URL
     echo -e "${BLUE}Checking for remaining GitHub URLs...${NC}"
-    REMAINING=$(grep -l "$GITHUB_URL" "$REPO_ROOT"/bootstrap/*.yaml 2>/dev/null || true)
+    REMAINING=$(grep -lE "$GITHUB_URL_PATTERN" "$REPO_ROOT"/bootstrap/*.yaml 2>/dev/null || true)
     if [ -n "$REMAINING" ]; then
         echo -e "  ${RED}✗ Files still containing GitHub URL:${NC}"
         echo "$REMAINING" | while read f; do echo "    - $(basename "$f")"; done
