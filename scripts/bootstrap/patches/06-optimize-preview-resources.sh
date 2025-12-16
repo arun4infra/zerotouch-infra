@@ -39,8 +39,18 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     CROSSPLANE_FILE="$REPO_ROOT/bootstrap/components/01-crossplane.yaml"
     KEDA_FILE="$REPO_ROOT/bootstrap/components/01-keda.yaml"
     
-    # 1. Keep NATS Box enabled for debugging (needed for stream validation in CI)
+    # 1. Disable NATS persistence in preview mode (no PVCs needed)
     if [ -f "$NATS_FILE" ]; then
+        # Disable JetStream file store (uses PVCs)
+        if grep -q "enabled: true" "$NATS_FILE" 2>/dev/null; then
+            # Disable fileStore PVC
+            sed -i.bak '/fileStore:/,/pvc:/{s/enabled: true/enabled: false/}' "$NATS_FILE"
+            # Keep memoryStore enabled for in-memory streams
+            sed -i.bak '/memoryStore:/,/maxSize:/{s/enabled: false/enabled: true/}' "$NATS_FILE"
+            rm -f "$NATS_FILE.bak"
+            echo -e "  ${GREEN}✓${NC} Disabled NATS persistence (using memory-only mode)"
+        fi
+        
         # Reduce NATS resources
         if grep -q "cpu: 100m" "$NATS_FILE" 2>/dev/null; then
             sed -i.bak 's/cpu: 100m/cpu: 50m/g' "$NATS_FILE"

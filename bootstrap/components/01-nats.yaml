@@ -23,6 +23,7 @@ spec:
               pvc:
                 enabled: true
                 size: 10Gi
+                storageClassName: local-path
             memoryStore:
               enabled: true
               maxSize: 1Gi
