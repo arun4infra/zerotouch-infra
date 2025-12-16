@@ -40,14 +40,15 @@ fi
 if [ "$IS_PREVIEW_MODE" = true ]; then
     echo -e "${BLUE}Updating ArgoCD manifests to use local filesystem...${NC}"
     
-    GITHUB_URL="https://github.com/arun4infra/zerotouch-platform.git"
+    # Match any GitHub URL for zerotouch-platform
+    GITHUB_URL_PATTERN="https://github.com/.*/zerotouch-platform.git"
     LOCAL_URL="file:///repo"
     
     # Update URLs in bootstrap files
     for file in "$REPO_ROOT"/bootstrap/*.yaml "$REPO_ROOT"/bootstrap/components/*.yaml "$REPO_ROOT"/bootstrap/components-tenants/*.yaml; do
         if [ -f "$file" ]; then
-            if grep -q "$GITHUB_URL" "$file" 2>/dev/null; then
-                sed -i.bak "s|$GITHUB_URL|$LOCAL_URL|g" "$file"
+            if grep -qE "$GITHUB_URL_PATTERN" "$file" 2>/dev/null; then
+                sed -i.bak -E "s|$GITHUB_URL_PATTERN|$LOCAL_URL|g" "$file"
                 rm -f "$file.bak"
                 echo -e "  ${GREEN}✓${NC} Updated: $(basename "$file")"
             fi

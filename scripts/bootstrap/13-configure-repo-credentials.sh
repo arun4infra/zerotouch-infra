@@ -47,7 +47,7 @@ add_repository() {
     local token="$3"
     
     # Extract repository name from URL for secret naming
-    # Example: https://github.com/arun4infra/zerotouch-tenants.git -> zerotouch-tenants
+    # Example: https://github.com/<user>/zerotouch-tenants.git -> zerotouch-tenants
     local repo_name=$(echo "$repo_url" | sed -E 's|.*/([^/]+)\.git$|\1|')
     local secret_name="repo-${repo_name}"
     
@@ -107,15 +107,15 @@ read_credentials_from_env() {
     
     print_blue "Reading GitHub credentials from .env.ssm..."
     
-    # Read GitHub credentials
-    GITHUB_USERNAME=$(grep "^/zerotouch/prod/platform/github/username=" "$ENV_SSM_FILE" | cut -d'=' -f2)
-    GITHUB_TOKEN=$(grep "^/zerotouch/prod/platform/github/token=" "$ENV_SSM_FILE" | cut -d'=' -f2)
+    # Read GitHub credentials (check both old and new paths)
+    GITHUB_USERNAME=$(grep "^/zerotouch/prod/github/username=" "$ENV_SSM_FILE" | cut -d'=' -f2)
+    GITHUB_TOKEN=$(grep "^/zerotouch/prod/github/token=" "$ENV_SSM_FILE" | cut -d'=' -f2)
     
     if [ -z "$GITHUB_USERNAME" ] || [ -z "$GITHUB_TOKEN" ]; then
         print_error "GitHub credentials not found in .env.ssm"
         print_info "Required variables:"
-        print_info "  /zerotouch/prod/platform/github/username=your-username"
-        print_info "  /zerotouch/prod/platform/github/token=ghp_xxxxx"
+        print_info "  /zerotouch/prod/github/username=your-username"
+        print_info "  /zerotouch/prod/github/token=ghp_xxxxx"
         return 1
     fi
     
@@ -178,7 +178,7 @@ elif [ "$#" -ne 0 ]; then
     echo "  $0                                   # Interactive mode"
     echo ""
     echo "Examples:"
-    echo "  Manual:  $0 https://github.com/arun4infra/zerotouch-tenants.git myuser ghp_xxxxx"
+    echo "  Manual:  $0 https://github.com/<username>/zerotouch-tenants.git myuser ghp_xxxxx"
     echo "  Auto:    $0 --auto"
     echo ""
     exit 1

@@ -276,7 +276,11 @@ else
     echo ""
     echo -e "${GREEN}ArgoCD Credentials:${NC}"
     echo -e "  Username: ${YELLOW}admin${NC}"
-    echo -e "  Password: ${YELLOW}$ARGOCD_PASSWORD${NC}"
+    if [[ -z "$CI" ]]; then
+        echo -e "  Password: ${YELLOW}$ARGOCD_PASSWORD${NC}"
+    else
+        echo -e "  Password: ${YELLOW}***MASKED*** (saved to credentials file)${NC}"
+    fi
     echo ""
 fi
 

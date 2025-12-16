@@ -5,10 +5,14 @@ namespace: argocd
 
 resources:
   - https://raw.githubusercontent.com/argoproj/argo-cd/v3.2.0/manifests/install.yaml
-  - argocd-cm-patch.yaml
 
 # Add control-plane tolerations to all workloads
 patches:
+  # Patch argocd-cm ConfigMap with resource exclusions
+  - path: argocd-cm-patch.yaml
+    target:
+      kind: ConfigMap
+      name: argocd-cm
   - target:
       kind: Deployment
       name: argocd-applicationset-controller

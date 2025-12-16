@@ -87,12 +87,14 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
             # Global LLM keys
             /zerotouch/prod/openai_api_key) env_var="OPENAI_API_KEY" ;;
             /zerotouch/prod/anthropic_api_key) env_var="ANTHROPIC_API_KEY" ;;
-            # GitHub credentials
-            */github/username) env_var="PAT_GITHUB_USER" ;;
-            */github/token|*/github/password) env_var="PAT_GITHUB" ;;
-            */ghcr/username) env_var="PAT_GITHUB_USER" ;;
-            */ghcr/password) env_var="PAT_GITHUB" ;;
-            # Tenant repo mappings - extract repo name and map to REPOS_<NAME>_<FIELD>
+            # GitHub credentials - use BOT_GITHUB_USERNAME and BOT_GITHUB_TOKEN
+            */github/username|*/ghcr/username) env_var="BOT_GITHUB_USERNAME" ;;
+            */github/token|*/github/password|*/ghcr/password) env_var="BOT_GITHUB_TOKEN" ;;
+            # Tenant repo - use TENANTS_REPO_URL and BOT_GITHUB credentials
+            */argocd/repos/zerotouch-tenants/url) env_var="TENANTS_REPO_URL" ;;
+            */argocd/repos/zerotouch-tenants/username) env_var="BOT_GITHUB_USERNAME" ;;
+            */argocd/repos/zerotouch-tenants/password) env_var="BOT_GITHUB_TOKEN" ;;
+            # Other repos - use REPOS_<NAME>_<FIELD> pattern
             */argocd/repos/*/url)
                 repo_name=$(echo "$key" | sed 's|.*/argocd/repos/\([^/]*\)/url|\1|' | tr '[:lower:]' '[:upper:]' | tr '-' '_')
                 env_var="REPOS_${repo_name}_URL"

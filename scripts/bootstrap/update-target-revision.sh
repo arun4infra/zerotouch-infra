@@ -28,13 +28,15 @@ echo ""
 if [ ! -f "$CONFIG_FILE" ]; then
     echo -e "${YELLOW}⚠️  Config file not found: $CONFIG_FILE${NC}"
     echo "Creating default config..."
-    cat > "$CONFIG_FILE" << 'EOF'
+    # Get repo URL from environment or use placeholder
+    PLATFORM_REPO_URL="${PLATFORM_REPO_URL:-https://github.com/\${BOT_GITHUB_USERNAME}/zerotouch-platform.git}"
+    cat > "$CONFIG_FILE" << EOF
 # Bootstrap Configuration
 # This file contains global configuration for the bootstrap process
 # Update TARGET_REVISION to change the branch/tag for all platform components
 
 # Git repository configuration
-REPO_URL: https://github.com/arun4infra/zerotouch-platform.git
+REPO_URL: ${PLATFORM_REPO_URL}
 TARGET_REVISION: main
 
 # To switch to a feature branch:

@@ -185,7 +185,11 @@ enable_rescue_mode() {
     fi
 
     log_success "Rescue mode enabled"
-    echo -e "  ${CYAN}Root Password:${NC} $root_password" >&2
+    if [[ -z "$CI" ]]; then
+        echo -e "  ${CYAN}Root Password:${NC} $root_password" >&2
+    else
+        echo -e "  ${CYAN}Root Password:${NC} ***MASKED*** (CI mode)" >&2
+    fi
 
     echo "$root_password"
 }

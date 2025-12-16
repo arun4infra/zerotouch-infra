@@ -158,10 +158,14 @@ log_info "✓ ArgoCD has cluster-admin permissions (required for namespace creat
 log_info ""
 log_step "Step 3/7: Configuring repository credentials..."
 
-# GitHub credentials - use public repo (no auth needed for public repos)
-GITHUB_REPO_URL="https://github.com/arun4infra/zerotouch-infra.git"
-GITHUB_USERNAME="arun4infra"
-GITHUB_TOKEN="${GITHUB_TOKEN:-}"  # Optional: set via environment variable if needed
+# GitHub credentials - use BOT_GITHUB_* environment variables
+if [[ -z "$BOT_GITHUB_USERNAME" ]]; then
+    log_error "BOT_GITHUB_USERNAME environment variable is required"
+    exit 1
+fi
+GITHUB_REPO_URL="https://github.com/${BOT_GITHUB_USERNAME}/zerotouch-platform.git"
+GITHUB_USERNAME="${BOT_GITHUB_USERNAME}"
+GITHUB_TOKEN="${BOT_GITHUB_TOKEN:-}"
 
 if kubectl get secret repo-credentials -n "$ARGOCD_NAMESPACE" &>/dev/null; then
     log_warn "Repository credentials already exist, skipping..."
@@ -194,7 +198,11 @@ else
     log_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     log_info "ArgoCD Login Credentials:"
     echo -e "  ${YELLOW}Username:${NC} admin"
-    echo -e "  ${YELLOW}Password:${NC} $ARGOCD_PASSWORD"
+    if [[ -z "$CI" ]]; then
+        echo -e "  ${YELLOW}Password:${NC} $ARGOCD_PASSWORD"
+    else
+        echo -e "  ${YELLOW}Password:${NC} ***MASKED*** (CI mode)"
+    fi
     log_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 fi
@@ -239,11 +247,11 @@ if kubectl get nodes &>/dev/null; then
 fi
 
 log_info "Checking for GitHub URLs in bootstrap files:"
-GITHUB_COUNT=$(grep -r "github.com/arun4infra/zerotouch-platform" "$REPO_ROOT/bootstrap/"*.yaml 2>/dev/null | wc -l | tr -d ' ')
+GITHUB_COUNT=$(grep -r "github.com/.*/zerotouch-platform" "$REPO_ROOT/bootstrap/"*.yaml 2>/dev/null | wc -l | tr -d ' ')
 log_info "  Files with GitHub URL: $GITHUB_COUNT"
 if [ "$GITHUB_COUNT" -gt 0 ]; then
     log_warn "  GitHub URLs found - patches may not have been applied!"
-    grep -l "github.com/arun4infra/zerotouch-platform" "$REPO_ROOT/bootstrap/"*.yaml 2>/dev/null | head -5
+    grep -l "github.com/.*/zerotouch-platform" "$REPO_ROOT/bootstrap/"*.yaml 2>/dev/null | head -5
 fi
 
 log_info "Checking for local file:///repo URLs:"
