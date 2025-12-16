@@ -195,7 +195,7 @@ workers:
 Centralized Git repository and branch configuration:
 ```yaml
 REPO_URL: https://github.com/arun4infra/zerotouch-platform.git
-TARGET_REVISION: feature/agent-executor
+TARGET_REVISION: main
 ```
 
 ## Directory Structure
