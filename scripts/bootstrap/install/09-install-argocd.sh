@@ -115,38 +115,17 @@ log_info "✓ ArgoCD manifests applied successfully"
 log_info ""
 log_step "Step 2/5: Waiting for ArgoCD to be ready..."
 
-# Give Kubernetes time to create the pods after kustomization
-log_info "Waiting for pods to be created..."
-sleep 30
-
-# Wait for pods to exist before checking readiness
-log_info "Checking if ArgoCD server pod exists..."
-RETRY_COUNT=0
-MAX_RETRIES=30
-while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    if kubectl get pod -n "$ARGOCD_NAMESPACE" -l app.kubernetes.io/name=argocd-server --no-headers 2>/dev/null | grep -q argocd-server; then
-        log_info "✓ ArgoCD server pod found"
-        break
-    fi
-
-    RETRY_COUNT=$((RETRY_COUNT + 1))
-    if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
-        sleep 2
-    fi
-done
-
-if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-    log_error "ArgoCD server pod not created after 60 seconds"
-    log_info "Checking pod status..."
-    kubectl get pods -n "$ARGOCD_NAMESPACE"
+# Step 2a: Wait for ArgoCD pods
+if ! "$REPO_ROOT/scripts/bootstrap/wait/09a-wait-argocd-pods.sh" --timeout 300 --namespace "$ARGOCD_NAMESPACE"; then
+    log_error "ArgoCD pods failed to become ready"
     exit 1
 fi
 
-log_info "Waiting for ArgoCD pods to become ready (timeout: 5 minutes)..."
-kubectl wait --for=condition=ready pod \
-    -l app.kubernetes.io/name=argocd-server \
-    -n "$ARGOCD_NAMESPACE" \
-    --timeout=300s
+# Step 2b: Wait for repo server to be responsive
+if ! "$REPO_ROOT/scripts/bootstrap/wait/09b-wait-argocd-repo-server.sh" --timeout 120 --namespace "$ARGOCD_NAMESPACE"; then
+    log_error "ArgoCD repo server failed to become responsive"
+    exit 1
+fi
 
 log_info "✓ ArgoCD is ready"
 
@@ -265,7 +244,8 @@ log_info "✓ Platform definitions applied"
 log_info ""
 log_step "Step 6/7: Waiting for initial sync..."
 
-sleep 5  # Give ArgoCD time to detect the application
+# Give ArgoCD time to detect and process the application
+sleep 5
 
 log_info "Checking ArgoCD applications..."
 kubectl get applications -n "$ARGOCD_NAMESPACE"
