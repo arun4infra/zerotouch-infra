@@ -59,18 +59,23 @@ jobs:
 
       - name: Wait for platform applications to sync
         run: |
-          chmod +x scripts/wait-for-sync.sh
-          ./scripts/wait-for-sync.sh --timeout 600
+          chmod +x scripts/bootstrap/wait/wait-for-sync.sh
+          ./scripts/bootstrap/wait/wait-for-sync.sh --timeout 600
 
       - name: Wait for pods to be ready
         run: |
-          chmod +x scripts/wait-for-pods.sh
-          ./scripts/wait-for-pods.sh --timeout 600
+          chmod +x scripts/bootstrap/wait/wait-for-pods.sh
+          ./scripts/bootstrap/wait/wait-for-pods.sh --timeout 600
 
       - name: Run cluster validation
         run: |
-          chmod +x scripts/bootstrap/99-validate-cluster.sh
-          ./scripts/bootstrap/99-validate-cluster.sh
+          chmod +x scripts/bootstrap/validation/99-validate-cluster.sh
+          ./scripts/bootstrap/validation/99-validate-cluster.sh
+
+      - name: Validate port-forwards
+        run: |
+          chmod +x scripts/bootstrap/validation/validate-port-forwards.sh
+          ./scripts/bootstrap/validation/validate-port-forwards.sh --preview-mode --timeout 300
 
       - name: Show final cluster state
         if: always()
@@ -108,8 +113,8 @@ jobs:
       - name: Cleanup preview environment
         if: always()
         run: |
-          chmod +x scripts/bootstrap/cleanup-preview.sh
-          ./scripts/bootstrap/cleanup-preview.sh || true
+          chmod +x scripts/bootstrap/preview/cleanup-preview.sh
+          ./scripts/bootstrap/preview/cleanup-preview.sh || true
 
       - name: Summary
         if: success()

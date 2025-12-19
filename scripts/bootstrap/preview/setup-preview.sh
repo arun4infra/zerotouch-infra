@@ -25,7 +25,7 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 CLUSTER_NAME="zerotouch-preview"
-KIND_CONFIG="$SCRIPT_DIR/kind-config.yaml"
+KIND_CONFIG="$SCRIPT_DIR/helpers/kind-config.yaml"
 
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   Setup Preview Cluster                                     ║${NC}"
@@ -39,7 +39,7 @@ echo ""
 # 1. Apply preview patches (URLs, storage class, tolerations, disable local-path-provisioner)
 echo -e "${BLUE}Applying preview patches...${NC}"
 # Pass --force since we're definitely in preview mode (cluster doesn't exist yet)
-"$SCRIPT_DIR/../patches/00-apply-all-patches.sh" --force
+"$SCRIPT_DIR/patches/00-apply-all-patches.sh" --force
 
 # Patches applied - using default storage class (no verification needed)
 echo ""

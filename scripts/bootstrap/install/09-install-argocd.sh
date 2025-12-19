@@ -18,7 +18,7 @@ NC='\033[0m' # No Color
 ARGOCD_VERSION="v3.2.0"  # Latest stable as of 2024-11-24
 ARGOCD_NAMESPACE="argocd"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 # Parse mode parameter
 MODE="${1:-auto}"
