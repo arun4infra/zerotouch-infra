@@ -10,7 +10,6 @@ spec:
   source:
     repoURL: file:///repo
     path: bootstrap/overlays/preview
-    targetRevision: HEAD
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
