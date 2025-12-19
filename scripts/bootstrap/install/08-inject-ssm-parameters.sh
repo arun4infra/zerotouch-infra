@@ -66,7 +66,7 @@ echo ""
 # Check if .env.ssm file exists, if not generate from environment variables
 if [ ! -f "$ENV_FILE" ]; then
     echo -e "${YELLOW}⚠️  $ENV_FILE not found, generating from environment variables...${NC}"
-    "$SCRIPT_DIR/helpers/generate-env-ssm.sh"
+    "$SCRIPT_DIR/../helpers/generate-env-ssm.sh"
 fi
 
 # Check AWS CLI is installed
