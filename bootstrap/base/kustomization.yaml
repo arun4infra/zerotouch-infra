@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- 01-crossplane.yaml
+- 01-eso.yaml
+- 01-keda.yaml
+- 01-nats.yaml
+- 01-cnpg.yaml
+- 01-kagent-crds.yaml
+- 01-kagent.yaml
+- 01-foundation-config.yaml
+- 03-intelligence.yaml
+- 04-apis.yaml
+- 05-databases.yaml

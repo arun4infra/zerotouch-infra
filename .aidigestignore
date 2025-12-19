@@ -8,9 +8,11 @@ environments/*/*.secret.yaml
 .sops.yaml
 .claude
 docs
-scripts/bootstrap/bootstrap-credentials/*.txt
 bootstrap/talos/nodes/cp01-main/config.yaml.*
 # Temporary files
 *.log
 .kiro
 services
+zerotouch-platform/scripts/local-ci/logs
+artifacts
+codebase.md

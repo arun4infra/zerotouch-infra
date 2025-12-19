@@ -34,38 +34,11 @@ elif command -v kubectl >/dev/null 2>&1 && kubectl cluster-info >/dev/null 2>&1;
 fi
 
 if [ "$IS_PREVIEW_MODE" = true ]; then
-    echo -e "${BLUE}Excluding tenant applications from preview mode...${NC}"
-    
-    ROOT_YAML="$REPO_ROOT/bootstrap/root.yaml"
-    
-    if [ ! -f "$ROOT_YAML" ]; then
-        echo -e "${RED}Error: root.yaml not found at $ROOT_YAML${NC}"
-        exit 1
-    fi
-    
-    # Update include pattern to exclude 11-* (tenant applications)
-    # Change from: include: '{00-*,10-*,11-*}.yaml'
-    # To:          include: '{00-*,10-*}.yaml'
-    if grep -q "include:.*11-\*" "$ROOT_YAML" 2>/dev/null; then
-        sed -i.bak "s/include: '{00-\*,10-\*,11-\*}\.yaml'/include: '{00-*,10-*}.yaml'/" "$ROOT_YAML"
-        rm -f "$ROOT_YAML.bak"
-        echo -e "  ${GREEN}✓${NC} Excluded 11-* (tenants) from root.yaml"
-    else
-        echo -e "  ${YELLOW}⊘${NC} root.yaml already excludes tenants or pattern not found"
-    fi
-    
-    # Verify the change
-    echo -e "${BLUE}Verifying tenant exclusion...${NC}"
-    if grep -q "include:.*11-\*" "$ROOT_YAML" 2>/dev/null; then
-        echo -e "  ${RED}✗ root.yaml still includes 11-* pattern!${NC}"
-        grep -n "include:" "$ROOT_YAML" || true
-        exit 1
-    else
-        echo -e "  ${GREEN}✓ root.yaml verified - tenants excluded${NC}"
-        grep -n "include:" "$ROOT_YAML" || true
-    fi
-    
-    echo -e "${GREEN}✓ Tenant applications excluded from preview mode${NC}"
+    echo -e "${YELLOW}NOTE: This script is now deprecated.${NC}"
+    echo -e "${BLUE}Tenant exclusion is now handled by the overlay structure.${NC}"
+    echo -e "${BLUE}Preview overlay in bootstrap/overlays/preview only includes base components.${NC}"
+    echo -e "${BLUE}Tenant components are in bootstrap/components-tenants/ and not included in base.${NC}"
+    echo -e "${GREEN}✓ No action needed - tenants are automatically excluded from preview mode${NC}"
 fi
 
 exit 0

@@ -23,8 +23,12 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 # Parse mode parameter
 MODE="${1:-auto}"
 
-# Root application path (same for both modes - patches handle the differences)
-ROOT_APP_PATH="bootstrap/root.yaml"
+# Root application path - now using overlays
+if [ "$MODE" = "preview" ]; then
+    ROOT_APP_OVERLAY="bootstrap/overlays/preview"
+else
+    ROOT_APP_OVERLAY="bootstrap/overlays/production"
+fi
 
 # Function to print colored messages
 log_info() {
@@ -209,61 +213,52 @@ fi
 
 # Step 4.5: Skipped - NATS will be created by ArgoCD with default storage class
 
-# Step 5: Deploy root application
+# Step 5: Deploy root application using overlays
 log_info ""
-log_step "Step 5/7: Deploying root application (GitOps)..."
+log_step "Step 5/7: Deploying platform via Kustomize overlay..."
 
-if [[ ! -f "$REPO_ROOT/$ROOT_APP_PATH" ]]; then
-    log_error "Root application not found at: $REPO_ROOT/$ROOT_APP_PATH"
+if [[ ! -d "$REPO_ROOT/$ROOT_APP_OVERLAY" ]]; then
+    log_error "Root application overlay not found at: $REPO_ROOT/$ROOT_APP_OVERLAY"
     exit 1
 fi
 
-# Debug: Log file contents before applying (helps diagnose patch issues)
-log_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-log_info "DEBUG: Contents of key files before ArgoCD sync"
-log_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-log_info "root.yaml repoURL:"
-grep -n "repoURL" "$REPO_ROOT/$ROOT_APP_PATH" || echo "  (no repoURL found)"
-
-log_info "10-platform-bootstrap.yaml repoURL:"
-grep -n "repoURL" "$REPO_ROOT/bootstrap/10-platform-bootstrap.yaml" 2>/dev/null || echo "  (file not found or no repoURL)"
-
-log_info "01-nats.yaml storageClassName:"
-grep -n "storageClassName" "$REPO_ROOT/bootstrap/components/01-nats.yaml" 2>/dev/null || echo "  (file not found or no storageClassName)"
-
-log_info "01-nats.yaml targetRevision:"
-grep -n "targetRevision" "$REPO_ROOT/bootstrap/components/01-nats.yaml" 2>/dev/null || echo "  (no targetRevision found - THIS WILL CAUSE HELM CHART ERROR!)"
-
-log_info "Verifying files inside Kind container at /repo:"
-if kubectl get nodes &>/dev/null; then
-    # Get the Kind container name
-    KIND_CONTAINER=$(docker ps --filter "name=zerotouch-preview-control-plane" --format "{{.Names}}" 2>/dev/null || echo "")
-    if [ -n "$KIND_CONTAINER" ]; then
-        log_info "Checking /repo/bootstrap/components/01-nats.yaml inside container:"
-        docker exec "$KIND_CONTAINER" grep -n "storageClassName" /repo/bootstrap/components/01-nats.yaml 2>/dev/null || echo "  (file not accessible in container)"
-        docker exec "$KIND_CONTAINER" grep -n "targetRevision" /repo/bootstrap/components/01-nats.yaml 2>/dev/null || echo "  (no targetRevision in container)"
-    fi
+if [ "$MODE" = "preview" ]; then
+    log_info "Applying PREVIEW configuration (No Cilium, Local URLs)..."
+else
+    log_info "Applying PRODUCTION configuration (With Cilium, GitHub URLs)..."
 fi
 
-log_info "Checking for GitHub URLs in bootstrap files:"
-GITHUB_COUNT=$(grep -r "github.com/.*/zerotouch-platform" "$REPO_ROOT/bootstrap/"*.yaml 2>/dev/null | wc -l | tr -d ' ')
-log_info "  Files with GitHub URL: $GITHUB_COUNT"
-if [ "$GITHUB_COUNT" -gt 0 ]; then
-    log_warn "  GitHub URLs found - patches may not have been applied!"
-    grep -l "github.com/.*/zerotouch-platform" "$REPO_ROOT/bootstrap/"*.yaml 2>/dev/null | head -5
-fi
+# Debug: Log overlay contents before applying
+log_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log_info "DEBUG: Verifying overlay configuration"
+log_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-log_info "Checking for local file:///repo URLs:"
-LOCAL_COUNT=$(grep -r "file:///repo" "$REPO_ROOT/bootstrap/"*.yaml 2>/dev/null | wc -l | tr -d ' ')
-log_info "  Files with local URL: $LOCAL_COUNT"
+log_info "Using overlay: $ROOT_APP_OVERLAY"
+
+# Test the kustomization
+log_info "Testing kustomization build..."
+kubectl kustomize "$REPO_ROOT/$ROOT_APP_OVERLAY" > /tmp/kustomize-output.yaml
+KUSTOMIZE_APPS=$(grep -c "kind: Application" /tmp/kustomize-output.yaml || echo "0")
+log_info "  Generated $KUSTOMIZE_APPS Application resources"
+
+if [ "$MODE" = "preview" ]; then
+    LOCAL_COUNT=$(grep -c "file:///repo" /tmp/kustomize-output.yaml || echo "0")
+    CILIUM_EXCLUDED=$(grep -c "exclude.*cilium" /tmp/kustomize-output.yaml || echo "0")
+    log_info "  Local file URLs: $LOCAL_COUNT"
+    log_info "  Cilium exclusions: $CILIUM_EXCLUDED"
+else
+    GITHUB_COUNT=$(grep -c "github.com" /tmp/kustomize-output.yaml || echo "0")
+    CILIUM_APPS=$(grep -c "name: cilium" /tmp/kustomize-output.yaml || echo "0")
+    log_info "  GitHub URLs: $GITHUB_COUNT"
+    log_info "  Cilium applications: $CILIUM_APPS"
+fi
 
 log_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-log_info "Applying root application..."
-kubectl apply --server-side -f "$REPO_ROOT/$ROOT_APP_PATH"
+log_info "Applying platform overlay..."
+kubectl apply -k "$REPO_ROOT/$ROOT_APP_OVERLAY"
 
-log_info "✓ Root application deployed"
+log_info "✓ Platform definitions applied"
 
 # Step 6: Wait for initial sync
 log_info ""
