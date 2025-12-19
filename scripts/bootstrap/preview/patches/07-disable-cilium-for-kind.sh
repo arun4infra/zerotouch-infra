@@ -52,9 +52,30 @@ if [ "$IS_KIND_CLUSTER" = true ]; then
         # Also remove any existing Cilium installation
         if kubectl get namespace kube-system >/dev/null 2>&1; then
             echo -e "${BLUE}Removing existing Cilium installation...${NC}"
-            kubectl delete daemonset cilium -n kube-system --ignore-not-found=true
+            
+            # Remove all Cilium DaemonSets
+            kubectl delete daemonset cilium cilium-envoy -n kube-system --ignore-not-found=true
+            
+            # Remove all Cilium Deployments
             kubectl delete deployment cilium-operator -n kube-system --ignore-not-found=true
+            
+            # Remove Cilium ConfigMaps
             kubectl delete configmap cilium-config -n kube-system --ignore-not-found=true
+            
+            # Remove Cilium Services
+            kubectl delete service cilium-agent cilium-operator-metrics -n kube-system --ignore-not-found=true
+            
+            # Remove Cilium ServiceAccounts
+            kubectl delete serviceaccount cilium cilium-operator -n kube-system --ignore-not-found=true
+            
+            # Remove Cilium ClusterRoles and ClusterRoleBindings
+            kubectl delete clusterrole cilium cilium-operator --ignore-not-found=true
+            kubectl delete clusterrolebinding cilium cilium-operator --ignore-not-found=true
+            
+            # Force delete any remaining Cilium pods
+            kubectl delete pods -n kube-system -l k8s-app=cilium --force --grace-period=0 --ignore-not-found=true
+            kubectl delete pods -n kube-system -l io.cilium/app=operator --force --grace-period=0 --ignore-not-found=true
+            
             echo -e "${GREEN}✓${NC} Existing Cilium components removed"
         fi
     else
