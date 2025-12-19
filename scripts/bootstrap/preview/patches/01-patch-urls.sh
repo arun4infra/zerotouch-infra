@@ -41,6 +41,10 @@ fi
 if [ "$IS_PREVIEW_MODE" = true ]; then
     echo -e "${BLUE}Updating ArgoCD manifests to use local filesystem...${NC}"
     
+    # Get current branch name
+    CURRENT_BRANCH=$(cd "$REPO_ROOT" && git branch --show-current)
+    echo -e "${BLUE}Current branch: $CURRENT_BRANCH${NC}"
+    
     # Match any GitHub URL for zerotouch-platform
     GITHUB_URL_PATTERN="https://github.com/.*/zerotouch-platform.git"
     LOCAL_URL="file:///repo"
@@ -56,17 +60,32 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
         fi
     done
     
-    # Remove targetRevision ONLY for Git sources (not Helm charts)
+    # Remove targetRevision ONLY for Git sources (not Helm charts) and replace with current branch
     # Helm charts need targetRevision to specify chart version
     for file in "$REPO_ROOT"/bootstrap/argocd/base/*.yaml "$REPO_ROOT"/bootstrap/argocd/overlays/production/components-tenants/*.yaml; do
         if [ -f "$file" ]; then
-            # Only remove targetRevision if this is a Git source (has repoURL with file:///repo)
+            # Only update targetRevision if this is a Git source (has repoURL with file:///repo)
             # Skip if it's a Helm chart (has 'chart:' field)
             if grep -q "file:///repo" "$file" 2>/dev/null && ! grep -q "^  chart:" "$file" 2>/dev/null; then
                 if grep -q "targetRevision:" "$file" 2>/dev/null; then
-                    sed -i.bak '/targetRevision:/d' "$file"
+                    # Escape the branch name for sed
+                    ESCAPED_BRANCH=$(echo "$CURRENT_BRANCH" | sed 's/[\/&]/\\&/g')
+                    sed -i.bak "s/targetRevision:.*/targetRevision: $ESCAPED_BRANCH/" "$file"
                     rm -f "$file.bak"
                 fi
+            fi
+        fi
+    done
+    
+    # Also update the root.yaml files to use current branch
+    for root_file in "$REPO_ROOT"/bootstrap/argocd/overlays/*/root.yaml; do
+        if [ -f "$root_file" ] && grep -q "file:///repo" "$root_file" 2>/dev/null; then
+            if grep -q "targetRevision:" "$root_file" 2>/dev/null; then
+                # Escape the branch name for sed
+                ESCAPED_BRANCH=$(echo "$CURRENT_BRANCH" | sed 's/[\/&]/\\&/g')
+                sed -i.bak "s/targetRevision:.*/targetRevision: $ESCAPED_BRANCH/" "$root_file"
+                rm -f "$root_file.bak"
+                echo -e "  ${GREEN}✓${NC} Updated targetRevision to $CURRENT_BRANCH: $(basename "$(dirname "$root_file")")/$(basename "$root_file")"
             fi
         fi
     done
