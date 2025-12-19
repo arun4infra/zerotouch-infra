@@ -64,8 +64,48 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
             exit 0
         fi
         
-        if [ "$SYNC_STATUS" = "OutOfSync" ] || [ "$HEALTH_STATUS" = "Degraded" ]; then
-            echo -e "${YELLOW}⚠️  Status: $SYNC_STATUS / $HEALTH_STATUS - waiting...${NC}"
+        # Show detailed error information EVERY time for non-healthy states
+        if [ "$SYNC_STATUS" != "Synced" ] || [ "$HEALTH_STATUS" != "Healthy" ]; then
+            echo -e "${YELLOW}   Investigating status: $SYNC_STATUS / $HEALTH_STATUS${NC}"
+            
+            # Get application JSON for detailed analysis
+            APP_JSON=$(kubectl_retry get application platform-bootstrap -n argocd -o json 2>/dev/null || echo "{}")
+            
+            # Show error conditions
+            CONDITIONS=$(echo "$APP_JSON" | jq -r '.status.conditions[]? | "     - \(.type): \(.message // "no message")"' 2>/dev/null)
+            if [ -n "$CONDITIONS" ]; then
+                echo -e "${YELLOW}   Conditions:${NC}"
+                echo "$CONDITIONS"
+            fi
+            
+            # Show operation state for sync errors
+            OP_PHASE=$(echo "$APP_JSON" | jq -r '.status.operationState.phase // "none"' 2>/dev/null)
+            OP_MSG=$(echo "$APP_JSON" | jq -r '.status.operationState.message // ""' 2>/dev/null)
+            if [ "$OP_PHASE" != "none" ] && [ "$OP_PHASE" != "null" ]; then
+                if [ "$OP_PHASE" = "Failed" ] || [ "$OP_PHASE" = "Error" ]; then
+                    echo -e "${RED}   Operation: $OP_PHASE${NC}"
+                    [ -n "$OP_MSG" ] && echo -e "${RED}   Message: ${OP_MSG:0:200}${NC}"
+                else
+                    echo -e "${BLUE}   Operation: $OP_PHASE${NC}"
+                    [ -n "$OP_MSG" ] && echo -e "${BLUE}   Message: ${OP_MSG:0:100}${NC}"
+                fi
+            fi
+            
+            # Show source configuration to verify patch worked
+            REPO_URL=$(echo "$APP_JSON" | jq -r '.spec.source.repoURL // "unknown"' 2>/dev/null)
+            TARGET_REV=$(echo "$APP_JSON" | jq -r '.spec.source.targetRevision // "unknown"' 2>/dev/null)
+            SOURCE_PATH=$(echo "$APP_JSON" | jq -r '.spec.source.path // "unknown"' 2>/dev/null)
+            echo -e "${BLUE}   Source: $REPO_URL${NC}"
+            echo -e "${BLUE}   Target: $TARGET_REV${NC}"
+            echo -e "${BLUE}   Path: $SOURCE_PATH${NC}"
+            
+            # Show recent ArgoCD logs related to this app
+            echo -e "${BLUE}   Recent repo server logs:${NC}"
+            kubectl_retry logs -n argocd -l app.kubernetes.io/name=argocd-repo-server --tail=10 2>/dev/null | \
+                grep -i "platform-bootstrap\|error\|failed\|unable to resolve" | tail -3 | \
+                sed 's/^/     /' || echo "     No relevant logs found"
+            
+            echo ""
         fi
     else
         echo -e "${YELLOW}⚠️  platform-bootstrap application not found yet${NC}"
@@ -93,6 +133,36 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
 done
 
 echo -e "${RED}✗ Timeout waiting for platform-bootstrap to sync${NC}"
-echo -e "${YELLOW}Check status: kubectl describe application platform-bootstrap -n argocd${NC}"
+echo ""
+echo -e "${YELLOW}=== Final Debugging Information ===${NC}"
+
+# Show final application status
+if kubectl_retry get application platform-bootstrap -n argocd >/dev/null 2>&1; then
+    echo -e "${BLUE}Final application status:${NC}"
+    kubectl_retry describe application platform-bootstrap -n argocd || echo "Failed to describe application"
+    echo ""
+    
+    echo -e "${BLUE}Application YAML:${NC}"
+    kubectl_retry get application platform-bootstrap -n argocd -o yaml || echo "Failed to get application YAML"
+    echo ""
+else
+    echo -e "${RED}platform-bootstrap application not found${NC}"
+fi
+
+# Show ArgoCD server logs for errors
+echo -e "${BLUE}Recent ArgoCD server logs:${NC}"
+kubectl_retry logs -n argocd -l app.kubernetes.io/name=argocd-server --tail=50 | grep -i "platform-bootstrap\|error\|failed" || echo "No relevant logs found"
+echo ""
+
+# Show ArgoCD repo server logs for errors  
+echo -e "${BLUE}Recent ArgoCD repo server logs:${NC}"
+kubectl_retry logs -n argocd -l app.kubernetes.io/name=argocd-repo-server --tail=50 | grep -i "platform-bootstrap\|error\|failed\|unable to resolve" || echo "No relevant logs found"
+echo ""
+
+echo -e "${YELLOW}Manual debugging commands:${NC}"
+echo "kubectl describe application platform-bootstrap -n argocd"
+echo "kubectl get application platform-bootstrap -n argocd -o yaml"
+echo "kubectl logs -n argocd -l app.kubernetes.io/name=argocd-server --tail=100"
+echo "kubectl logs -n argocd -l app.kubernetes.io/name=argocd-repo-server --tail=100"
 echo ""
 exit 1
