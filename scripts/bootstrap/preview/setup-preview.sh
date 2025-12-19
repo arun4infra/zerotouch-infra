@@ -25,7 +25,7 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 CLUSTER_NAME="zerotouch-preview"
-KIND_CONFIG="$SCRIPT_DIR/kind-config.yaml"
+KIND_CONFIG="$SCRIPT_DIR/helpers/kind-config.yaml"
 
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   Setup Preview Cluster                                     ║${NC}"

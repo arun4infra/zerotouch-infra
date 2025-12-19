@@ -139,7 +139,7 @@ echo ""
 if [ "$MODE" = "preview" ]; then
     echo -e "${BLUE}Running in PREVIEW mode (GitHub Actions/Kind)${NC}"
     echo ""
-    "$SCRIPT_DIR/helpers/setup-preview.sh"
+    "$SCRIPT_DIR/preview/setup-preview.sh"
 fi
 
 # ============================================================================
@@ -163,15 +163,15 @@ fi
 if [ "$MODE" = "production" ]; then
     # Step 1: Embed Cilium in Talos config
     echo -e "${YELLOW}[1/14] Embedding Cilium CNI...${NC}"
-    "$SCRIPT_DIR/02-embed-cilium.sh"
+    "$SCRIPT_DIR/install/02-embed-cilium.sh"
 
     # Step 2: Install Talos OS
     echo -e "${YELLOW}[2/14] Installing Talos OS...${NC}"
-    "$SCRIPT_DIR/03-install-talos.sh" --server-ip "$SERVER_IP" --user root --password "$ROOT_PASSWORD" --yes
+    "$SCRIPT_DIR/install/03-install-talos.sh" --server-ip "$SERVER_IP" --user root --password "$ROOT_PASSWORD" --yes
 
     # Step 3: Bootstrap Talos cluster
     echo -e "${YELLOW}[3/14] Bootstrapping Talos cluster...${NC}"
-    "$SCRIPT_DIR/04-bootstrap-talos.sh" "$SERVER_IP"
+    "$SCRIPT_DIR/install/04-bootstrap-talos.sh" "$SERVER_IP"
 
     "$SCRIPT_DIR/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "TALOS CREDENTIALS" "Talos Config: bootstrap/talos/talosconfig
 Control Plane Config: bootstrap/talos/nodes/cp01-main/config.yaml
@@ -182,25 +182,25 @@ Access Talos:
     # Step 4: Add Worker Nodes (if specified)
     if [ -n "$WORKER_NODES" ]; then
         echo -e "${YELLOW}[4/14] Adding worker nodes...${NC}"
-        "$SCRIPT_DIR/05-add-worker-nodes.sh" "$WORKER_NODES" "$WORKER_PASSWORD"
+        "$SCRIPT_DIR/install/05-add-worker-nodes.sh" "$WORKER_NODES" "$WORKER_PASSWORD"
     else
         echo -e "${BLUE}[4/14] No worker nodes specified - single node cluster${NC}"
     fi
 
     # Step 5: Wait for Cilium CNI
     echo -e "${YELLOW}[5/14] Waiting for Cilium CNI...${NC}"
-    "$SCRIPT_DIR/06-wait-cilium.sh"
+    "$SCRIPT_DIR/wait/06-wait-cilium.sh"
 else
     echo -e "${BLUE}[1-5/14] Skipping Talos installation (preview mode uses Kind)${NC}"
 fi
 
 # Step 6: Inject ESO Secrets
 echo -e "${YELLOW}[6/14] Injecting ESO secrets...${NC}"
-"$SCRIPT_DIR/07-inject-eso-secrets.sh"
+"$SCRIPT_DIR/install/07-inject-eso-secrets.sh"
 
 # Step 7: Inject SSM Parameters (BEFORE ArgoCD)
 echo -e "${YELLOW}[7/14] Injecting SSM parameters...${NC}"
-"$SCRIPT_DIR/08-inject-ssm-parameters.sh"
+"$SCRIPT_DIR/install/08-inject-ssm-parameters.sh"
 
 if [ "$MODE" = "production" ]; then
     "$SCRIPT_DIR/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "AWS SSM PARAMETER STORE" "Parameters injected from .env.ssm to AWS SSM Parameter Store
@@ -209,12 +209,12 @@ Verify parameters:
   aws ssm get-parameters-by-path --path /zerotouch/prod --region ap-south-1"
 fi
 
-# Step 8: Re-apply patches for preview mode (ensure mount has latest changes)
+# Step 8: Apply patches for preview mode BEFORE ArgoCD installation
 if [ "$MODE" = "preview" ]; then
-    echo -e "${YELLOW}[8a/14] Re-applying patches after cluster creation...${NC}"
-    "$SCRIPT_DIR/patches/00-apply-all-patches.sh" --force
+    echo -e "${YELLOW}[8a/14] Applying patches before ArgoCD installation...${NC}"
+    "$SCRIPT_DIR/preview/patches/00-apply-all-patches.sh" --force
     
-    # Verify patches in the mounted filesystem
+    # Verify critical patches in the mounted filesystem
     echo -e "${BLUE}Verifying patches in Kind container...${NC}"
     KIND_CONTAINER=$(docker ps --filter "name=zerotouch-preview-control-plane" --format "{{.Names}}" 2>/dev/null || echo "")
     if [ -n "$KIND_CONTAINER" ]; then
@@ -222,41 +222,43 @@ if [ "$MODE" = "preview" ]; then
         docker exec "$KIND_CONTAINER" grep -n "storageClassName" /repo/bootstrap/components/01-nats.yaml || echo "File not found"
         echo -e "${BLUE}Platform-bootstrap exclude pattern in container:${NC}"
         docker exec "$KIND_CONTAINER" grep -n "exclude:" /repo/bootstrap/10-platform-bootstrap.yaml || echo "No exclude found"
+        echo -e "${BLUE}Cilium disabled status in container:${NC}"
+        docker exec "$KIND_CONTAINER" ls -la /repo/platform/01-foundation/cilium.yaml* || echo "Cilium files not found"
     fi
 fi
 
 # Step 8: Install ArgoCD (includes NATS pre-creation for preview mode)
 echo -e "${YELLOW}[8/14] Installing ArgoCD...${NC}"
-"$SCRIPT_DIR/09-install-argocd.sh" "$MODE"
+"$SCRIPT_DIR/install/09-install-argocd.sh" "$MODE"
 
 # Step 9: Wait for platform-bootstrap
 echo -e "${YELLOW}[9/14] Waiting for platform-bootstrap...${NC}"
-"$SCRIPT_DIR/10-wait-platform-bootstrap.sh"
+"$SCRIPT_DIR/wait/10-wait-platform-bootstrap.sh"
 
 # Step 10: Verify ESO
 echo -e "${YELLOW}[10/14] Verifying ESO...${NC}"
-"$SCRIPT_DIR/11-verify-eso.sh"
+"$SCRIPT_DIR/validation/11-verify-eso.sh"
 
 # Step 11: Verify child applications
 echo -e "${YELLOW}[11/14] Verifying child applications...${NC}"
-"$SCRIPT_DIR/12-verify-child-apps.sh"
+"$SCRIPT_DIR/validation/12-verify-child-apps.sh"
 
 # Step 12: Skipped (no longer needed - storage class auto-detected)
 
 # Step 13: Wait for all apps to be healthy
 echo -e "${YELLOW}[13/15] Waiting for all applications to be healthy...${NC}"
 if [ "$MODE" = "preview" ]; then
-    "$SCRIPT_DIR/12a-wait-apps-healthy.sh" --timeout 600 --preview-mode
+    "$SCRIPT_DIR/wait/12a-wait-apps-healthy.sh" --timeout 600 --preview-mode
 else
-    "$SCRIPT_DIR/12a-wait-apps-healthy.sh" --timeout 600
+    "$SCRIPT_DIR/wait/12a-wait-apps-healthy.sh" --timeout 600
 fi
 
 # Step 14: Wait for service dependencies
 echo -e "${YELLOW}[14/15] Waiting for platform services to be ready...${NC}"
 if [ "$MODE" = "preview" ]; then
-    "$SCRIPT_DIR/13-wait-service-dependencies.sh" --timeout 300 --preview-mode
+    "$SCRIPT_DIR/wait/13-wait-service-dependencies.sh" --timeout 300 --preview-mode
 else
-    "$SCRIPT_DIR/13-wait-service-dependencies.sh" --timeout 300
+    "$SCRIPT_DIR/wait/13-wait-service-dependencies.sh" --timeout 300
 fi
 
 # Extract ArgoCD password
@@ -287,9 +289,9 @@ fi
 if [ "$MODE" = "production" ]; then
     # Step 15: Configure repository credentials
     echo -e "${YELLOW}[15/15] Configuring repository credentials...${NC}"
-    "$SCRIPT_DIR/13-configure-repo-credentials.sh" --auto || {
+    "$SCRIPT_DIR/install/13-configure-repo-credentials.sh" --auto || {
         echo -e "${YELLOW}⚠️  Repository credentials configuration had issues${NC}"
-        echo -e "${BLUE}ℹ  You can configure manually: ./scripts/bootstrap/13-configure-repo-credentials.sh --auto${NC}"
+        echo -e "${BLUE}ℹ  You can configure manually: ./scripts/bootstrap/install/13-configure-repo-credentials.sh --auto${NC}"
     }
 
     "$SCRIPT_DIR/helpers/add-credentials.sh" "$CREDENTIALS_FILE" "ARGOCD REPOSITORY CREDENTIALS" "Repository credentials managed via ExternalSecrets from AWS SSM
@@ -307,7 +309,7 @@ if [ "$MODE" = "production" ]; then
 else
     echo -e "${BLUE}Skipping final cluster validation (preview mode)${NC}"
 fi
-"$SCRIPT_DIR/99-validate-cluster.sh" || {
+"$SCRIPT_DIR/validation/99-validate-cluster.sh" || {
     echo -e "${YELLOW}⚠️  Cluster validation found issues${NC}"
     echo -e "${BLUE}ℹ  Check ArgoCD applications: kubectl get applications -n argocd${NC}"
 }

@@ -214,7 +214,42 @@ scripts/
 │   ├── embed-cilium.sh                # Embed Cilium in Talos config
 │   ├── update-target-revision.sh      # Update Git branch across Applications
 │   └── *-examples.md                  # Usage examples for each script
-├── validate-cluster.sh                # Post-sync validation
-├── wait-for-pods.sh                   # Wait for pods to be ready
-└── wait-for-sync.sh                   # Wait for ArgoCD sync
+├── install/                           # Installation and configuration scripts
+│   ├── 02-embed-cilium.sh            # Embed Cilium in Talos config
+│   ├── 03-install-talos.sh           # Install Talos OS
+│   ├── 04-bootstrap-talos.sh         # Bootstrap Talos cluster
+│   ├── 05-add-worker-nodes.sh        # Add worker nodes
+│   ├── 07-inject-eso-secrets.sh      # Inject ESO secrets
+│   ├── 08-inject-ssm-parameters.sh   # Inject SSM parameters
+│   ├── 09-install-argocd.sh          # Install ArgoCD
+│   └── 13-configure-repo-credentials.sh # Configure repository credentials
+├── preview/                           # Preview environment specific scripts
+│   ├── setup-preview.sh              # Setup preview environment (Kind cluster)
+│   ├── cleanup-preview.sh            # Cleanup preview environment
+│   ├── helpers/                       # Preview-only helper utilities
+│   │   ├── kind-config.yaml          # Kind cluster configuration
+│   │   └── fix-kind-conflicts.sh.bkp # Fix Kind deployment conflicts (backup)
+│   └── patches/                       # Preview-specific patches
+│       ├── 00-apply-all-patches.sh   # Apply all preview patches
+│       ├── 01-patch-urls.sh          # Patch URLs for local development
+│       ├── 02-exclude-tenants.sh     # Exclude tenant applications
+│       ├── 03-patch-tolerations.sh   # Patch tolerations for Kind
+│       ├── 04-exclude-local-path.sh  # Exclude local path provisioner
+│       ├── 05-verify-storage-provisioner.sh # Verify storage provisioner
+│       ├── 06-optimize-preview-resources.sh # Optimize resources for preview
+│       └── 07-disable-cilium-for-kind.sh # Disable Cilium for Kind clusters
+├── wait/                              # Wait and monitoring scripts
+│   ├── 06-wait-cilium.sh             # Wait for Cilium CNI
+│   ├── 10-wait-platform-bootstrap.sh # Wait for platform-bootstrap
+│   ├── 12a-wait-apps-healthy.sh      # Wait for all apps to be healthy
+│   ├── 13-wait-service-dependencies.sh # Wait for service dependencies
+│   ├── wait-for-pods.sh              # Wait for pods to be ready
+│   └── wait-for-sync.sh              # Wait for ArgoCD sync
+└── validation/                        # Validation and verification scripts
+    ├── 11-verify-eso.sh              # Verify ESO
+    ├── 12-verify-child-apps.sh       # Verify child applications
+    ├── 14-verify-agent-executor.sh   # Verify agent executor
+    ├── 15-verify-eventdrivenservice-api.sh # Verify event-driven service API
+    ├── 99-validate-cluster.sh        # Post-sync validation
+    └── validate-port-forwards.sh     # Validate port-forward stability
 ```
