@@ -15,6 +15,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Navigate to repo root from script location (4 levels up from scripts/bootstrap/validation/04-apis/)
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
+# Debug output
+echo "DEBUG: Script starting..." >&2
+echo "DEBUG: SCRIPT_DIR=$SCRIPT_DIR" >&2
+echo "DEBUG: REPO_ROOT=$REPO_ROOT" >&2
+echo "DEBUG: Checking for test fixtures at: $REPO_ROOT/platform/04-apis/event-driven-service/tests/fixtures/" >&2
+ls -la "$REPO_ROOT/platform/04-apis/event-driven-service/tests/fixtures/" 2>&1 || echo "DEBUG: Directory not found!" >&2
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
