@@ -136,6 +136,11 @@ spec:
                       app.kubernetes.io/name: placeholder
                       app.kubernetes.io/component: web-service
                       app.kubernetes.io/managed-by: crossplane
+                      app.kubernetes.io/version: v1alpha1
+                    annotations:
+                      prometheus.io/scrape: "true"
+                      prometheus.io/port: "8080"
+                      prometheus.io/path: "/metrics"
                   spec:
                     serviceAccountName: placeholder
                     securityContext:
@@ -184,6 +189,13 @@ spec:
                           - name: http
                             containerPort: 8080
                             protocol: TCP
+                        env:
+                          - name: OTEL_SERVICE_NAME
+                            value: placeholder
+                          - name: OTEL_SERVICE_VERSION
+                            value: "v1alpha1"
+                          - name: OTEL_RESOURCE_ATTRIBUTES
+                            value: "service.name=placeholder,service.version=v1alpha1,deployment.environment=production"
                         envFrom:
                           - configMapRef:
                               name: placeholder-backend-config
@@ -265,6 +277,27 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.port
           toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].ports[0].containerPort
+        # Patch OpenTelemetry environment variables
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[0].value
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[2].value
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "service.name=%s,service.version=v1alpha1,deployment.environment=production"
+        # Patch Prometheus port annotation to match service port
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.port
+          toFieldPath: spec.forProvider.manifest.spec.template.metadata.annotations[prometheus.io/port]
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%d"
         # Patch replicas
         - type: FromCompositeFieldPath
           fromFieldPath: spec.replicas
@@ -524,6 +557,11 @@ spec:
                   app.kubernetes.io/name: placeholder
                   app.kubernetes.io/component: web-service
                   app.kubernetes.io/managed-by: crossplane
+                  app.kubernetes.io/version: v1alpha1
+                annotations:
+                  prometheus.io/scrape: "true"
+                  prometheus.io/port: "8080"
+                  prometheus.io/path: "/metrics"
               spec:
                 type: ClusterIP
                 sessionAffinity: None
@@ -559,6 +597,15 @@ spec:
           toFieldPath: spec.forProvider.manifest.spec.sessionAffinity
           policy:
             fromFieldPath: Optional
+        # Patch Prometheus port annotation to match service port
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.port
+          toFieldPath: spec.forProvider.manifest.metadata.annotations[prometheus.io/port]
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%d"
       readinessChecks:
         - type: MatchCondition
           matchCondition:

@@ -26,23 +26,20 @@ echo ""
 FAILED=0
 TOTAL=0
 
-# Run all numbered validation scripts (15-*, 16-*, etc.)
+# Run all numbered validation scripts (15-*, 16-*, 17-*, 18-*, 19-*)
 for script in "$SCRIPT_DIR"/[0-9][0-9]-*.sh; do
     if [ -f "$script" ] && [ "$script" != "$0" ]; then
         script_name=$(basename "$script")
-        api_name=$(echo "$script_name" | sed 's/[0-9][0-9]-verify-\(.*\)-api\.sh/\1/')
+        # Extract descriptive name from filename automatically
+        # Pattern: NN-verify-something-description.sh -> Something Description
+        api_name=$(echo "$script_name" | sed 's/[0-9][0-9]-verify-\(.*\)\.sh/\1/' | sed 's/-/ /g' | sed 's/\b\w/\U&/g')
         
-        echo -e "${BLUE}Validating: ${api_name} API${NC}"
-        echo "  - Script: $script"
-        echo "  - API name: $api_name"
-        echo "  - Script executable: $(test -x "$script" && echo 'yes' || echo 'no')"
+        echo -e "${BLUE}Validating: ${api_name}${NC}"
+        echo "  - Script: $script_name"
         ((TOTAL++))
         
         chmod +x "$script"
-        # Run script and show all output, capture exit code
-        echo "  - Executing: $script"
-        echo "  - Starting validation output:"
-        echo "    ----------------------------------------"
+        echo "  - Starting validation..."
         
         # Capture both stdout and stderr, and preserve exit code
         set +e  # Temporarily disable exit on error
@@ -50,17 +47,10 @@ for script in "$SCRIPT_DIR"/[0-9][0-9]-*.sh; do
         validation_exit_code=$?
         set -e  # Re-enable exit on error
         
-        echo "    ----------------------------------------"
-        echo "  - Validation completed with exit code: $validation_exit_code"
-        
         if [ $validation_exit_code -eq 0 ]; then
-            echo -e "  ✅ ${GREEN}${api_name} API validation passed${NC}"
+            echo -e "  ✅ ${GREEN}${api_name} validation passed${NC}"
         else
-            echo -e "  ❌ ${RED}${api_name} API validation failed (exit code: $validation_exit_code)${NC}"
-            echo -e "  ${YELLOW}Debug: kubectl context=$(kubectl config current-context 2>&1 || echo 'none')${NC}"
-            echo -e "  ${YELLOW}Debug: Testing kubectl access...${NC}"
-            kubectl get nodes 2>&1 | head -2 || echo "    kubectl get nodes failed"
-            kubectl get applications -n argocd 2>&1 | head -3 || echo "    kubectl get applications failed"
+            echo -e "  ❌ ${RED}${api_name} validation failed (exit code: $validation_exit_code)${NC}"
             ((FAILED++))
         fi
         echo ""

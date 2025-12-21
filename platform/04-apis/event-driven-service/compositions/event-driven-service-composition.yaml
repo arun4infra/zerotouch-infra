@@ -81,6 +81,11 @@ spec:
                             app.kubernetes.io/name: placeholder
                             app.kubernetes.io/component: event-driven-worker
                             app.kubernetes.io/managed-by: crossplane
+                            app.kubernetes.io/version: v1alpha1
+                          annotations:
+                            prometheus.io/scrape: "true"
+                            prometheus.io/port: "8080"
+                            prometheus.io/path: "/metrics"
                         spec:
                           serviceAccountName: placeholder
                           securityContext:
@@ -102,6 +107,14 @@ spec:
                                   value: placeholder
                                 - name: NATS_CONSUMER_GROUP
                                   value: placeholder
+                                - name: PORT
+                                  value: "8080"
+                                - name: OTEL_SERVICE_NAME
+                                  value: placeholder
+                                - name: OTEL_SERVICE_VERSION
+                                  value: "v1alpha1"
+                                - name: OTEL_RESOURCE_ATTRIBUTES
+                                  value: "service.name=placeholder,service.version=v1alpha1,deployment.environment=production"
                               envFrom:
                                 - secretRef:
                                     name: placeholder-secret1
@@ -242,10 +255,47 @@ spec:
                 fromFieldPath: spec.nats.consumer
                 toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[2].value
               
+              # Patch OpenTelemetry environment variables
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.claimRef.name
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[4].value
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.claimRef.name
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[6].value
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "service.name=%s,service.version=v1alpha1,deployment.environment=production"
+              
               # Patch HTTP port (optional - defaults to 8080)
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.httpPort
                 toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].ports[0].containerPort
+                policy:
+                  fromFieldPath: Optional
+              
+              # Patch PORT environment variable to match httpPort
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.httpPort
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[3].value
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%d"
+                policy:
+                  fromFieldPath: Optional
+              
+              # Patch Prometheus port annotation to match httpPort
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.httpPort
+                toFieldPath: spec.forProvider.manifest.spec.template.metadata.annotations[prometheus.io/port]
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%d"
                 policy:
                   fromFieldPath: Optional
               
@@ -334,6 +384,11 @@ spec:
                         app.kubernetes.io/name: placeholder
                         app.kubernetes.io/component: event-driven-worker
                         app.kubernetes.io/managed-by: crossplane
+                        app.kubernetes.io/version: v1alpha1
+                      annotations:
+                        prometheus.io/scrape: "true"
+                        prometheus.io/port: "8080"
+                        prometheus.io/path: "/metrics"
                     spec:
                       type: ClusterIP
                       selector:
@@ -383,6 +438,11 @@ spec:
                         app.kubernetes.io/name: placeholder
                         app.kubernetes.io/component: event-driven-worker
                         app.kubernetes.io/managed-by: crossplane
+                        app.kubernetes.io/version: v1alpha1
+                      annotations:
+                        prometheus.io/scrape: "true"
+                        prometheus.io/port: "8000"
+                        prometheus.io/path: "/metrics"
                     spec:
                       type: ClusterIP
                       sessionAffinity: None
@@ -423,6 +483,17 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.sessionAffinity
                 toFieldPath: spec.forProvider.manifest.spec.sessionAffinity
+                policy:
+                  fromFieldPath: Optional
+              # Patch Prometheus port annotation to match httpPort
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.httpPort
+                toFieldPath: spec.forProvider.manifest.metadata.annotations[prometheus.io/port]
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%d"
                 policy:
                   fromFieldPath: Optional
             readinessChecks:

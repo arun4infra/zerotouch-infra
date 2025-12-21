@@ -188,69 +188,28 @@ fi
 echo ""
 
 
-# Run EventDrivenService API validation directly
-EVENTDRIVENSERVICE_SCRIPT="$SCRIPT_DIR/04-apis/15-verify-eventdrivenservice-api.sh"
-echo -e "${BLUE}Running EventDrivenService API validation directly...${NC}"
-echo "  - Script path: $EVENTDRIVENSERVICE_SCRIPT"
-echo "  - Script exists: $(test -f "$EVENTDRIVENSERVICE_SCRIPT" && echo 'yes' || echo 'no')"
-echo "  - Script executable: $(test -x "$EVENTDRIVENSERVICE_SCRIPT" && echo 'yes' || echo 'no')"
+# Run comprehensive API validation
+API_VALIDATION_SCRIPT="$SCRIPT_DIR/04-apis/validate-apis.sh"
+echo -e "${BLUE}Running comprehensive Platform API validation...${NC}"
 
-if [[ -f "$EVENTDRIVENSERVICE_SCRIPT" ]]; then
-    echo -e "${BLUE}Executing EventDrivenService validation (direct call)...${NC}"
-    echo "========== EventDrivenService Validation Output =========="
-    
-    # Make executable and run directly
-    chmod +x "$EVENTDRIVENSERVICE_SCRIPT"
+if [[ -f "$API_VALIDATION_SCRIPT" ]]; then
+    # Make executable and run
+    chmod +x "$API_VALIDATION_SCRIPT"
     
     # Capture both stdout and stderr, preserve exit code
     set +e
-    "$EVENTDRIVENSERVICE_SCRIPT" 2>&1
-    eventdriven_exit_code=$?
+    "$API_VALIDATION_SCRIPT" 2>&1
+    api_exit_code=$?
     set -e
     
-    echo "========== End EventDrivenService Validation Output =========="
-    echo "EventDrivenService validation exit code: $eventdriven_exit_code"
-    
-    if [ $eventdriven_exit_code -eq 0 ]; then
-        echo -e "  ✅ ${GREEN}EventDrivenService API validation passed${NC}"
+    if [ $api_exit_code -eq 0 ]; then
+        echo -e "  ✅ ${GREEN}All Platform API validations passed${NC}"
     else
-        echo -e "  ❌ ${RED}EventDrivenService API validation failed (exit code: $eventdriven_exit_code)${NC}"
+        echo -e "  ❌ ${RED}Platform API validation failed (exit code: $api_exit_code)${NC}"
         ((FAILED++)) || true
     fi
 else
-    echo -e "  ⚠️  ${YELLOW}EventDrivenService validation script not found${NC}"
-    ((FAILED++)) || true
-fi
-
-# Run WebService API validation directly
-WEBSERVICE_SCRIPT="$SCRIPT_DIR/04-apis/16-verify-webservice-api.sh"
-echo -e "${BLUE}Running WebService API validation directly...${NC}"
-echo "  - Script path: $WEBSERVICE_SCRIPT"
-
-if [[ -f "$WEBSERVICE_SCRIPT" ]]; then
-    echo -e "${BLUE}Executing WebService validation (direct call)...${NC}"
-    echo "========== WebService Validation Output =========="
-    
-    # Make executable and run directly
-    chmod +x "$WEBSERVICE_SCRIPT"
-    
-    # Capture both stdout and stderr, preserve exit code
-    set +e
-    "$WEBSERVICE_SCRIPT" 2>&1
-    webservice_exit_code=$?
-    set -e
-    
-    echo "========== End WebService Validation Output =========="
-    echo "WebService validation exit code: $webservice_exit_code"
-    
-    if [ $webservice_exit_code -eq 0 ]; then
-        echo -e "  ✅ ${GREEN}WebService API validation passed${NC}"
-    else
-        echo -e "  ❌ ${RED}WebService API validation failed (exit code: $webservice_exit_code)${NC}"
-        ((FAILED++)) || true
-    fi
-else
-    echo -e "  ⚠️  ${YELLOW}WebService validation script not found${NC}"
+    echo -e "  ❌ ${RED}Platform API validation script not found${NC}"
     ((FAILED++)) || true
 fi
 
