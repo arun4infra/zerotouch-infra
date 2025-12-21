@@ -10,6 +10,11 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Source diagnostics helper
+source "$SCRIPT_DIR/../../helpers/diagnostics.sh" 2>/dev/null || {
+    echo "Warning: Could not load diagnostics helper"
+}
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -43,14 +48,78 @@ for script in "$SCRIPT_DIR"/[0-9][0-9]-*.sh; do
         
         # Capture both stdout and stderr, and preserve exit code
         set +e  # Temporarily disable exit on error
-        "$script" 2>&1  # Explicitly redirect stderr to stdout
+        output=$("$script" 2>&1)  # Capture all output
         validation_exit_code=$?
         set -e  # Re-enable exit on error
+        
+        # Always show the output
+        echo "$output"
         
         if [ $validation_exit_code -eq 0 ]; then
             echo -e "  ✅ ${GREEN}${api_name} validation passed${NC}"
         else
             echo -e "  ❌ ${RED}${api_name} validation failed (exit code: $validation_exit_code)${NC}"
+            echo -e "  ${RED}Error details shown above${NC}"
+            echo ""
+            
+            # Add diagnostic information for failed validations
+            echo -e "  ${YELLOW}🔍 Running diagnostics for ${api_name}...${NC}"
+            
+            # Check ArgoCD applications status
+            if command -v kubectl >/dev/null 2>&1; then
+                echo -e "  ${BLUE}ArgoCD Applications Status:${NC}"
+                kubectl get applications -n argocd 2>/dev/null | head -10 | while read -r line; do
+                    echo -e "    $line"
+                done || echo -e "    ${YELLOW}Could not get ArgoCD applications${NC}"
+                echo ""
+                
+                # Show specific diagnostics based on the validation type
+                case "${api_name,,}" in
+                    *"eventdrivenservice"*)
+                        echo -e "  ${BLUE}EventDrivenService XRD Status:${NC}"
+                        kubectl get crd xeventdrivenservices.platform.bizmatters.io 2>/dev/null | while read -r line; do
+                            echo -e "    $line"
+                        done || echo -e "    ${RED}EventDrivenService XRD not found${NC}"
+                        
+                        echo -e "  ${BLUE}EventDrivenService Composition Status:${NC}"
+                        kubectl get composition event-driven-service 2>/dev/null | while read -r line; do
+                            echo -e "    $line"
+                        done || echo -e "    ${RED}EventDrivenService Composition not found${NC}"
+                        ;;
+                    *"webservice"*)
+                        echo -e "  ${BLUE}WebService XRD Status:${NC}"
+                        kubectl get crd xwebservices.platform.bizmatters.io 2>/dev/null | while read -r line; do
+                            echo -e "    $line"
+                        done || echo -e "    ${RED}WebService XRD not found${NC}"
+                        
+                        echo -e "  ${BLUE}WebService Composition Status:${NC}"
+                        kubectl get composition webservice 2>/dev/null | while read -r line; do
+                            echo -e "    $line"
+                        done || echo -e "    ${RED}WebService Composition not found${NC}"
+                        ;;
+                esac
+                
+                # Show recent events that might be related
+                echo -e "  ${BLUE}Recent Warning Events:${NC}"
+                kubectl get events --all-namespaces --field-selector type=Warning --sort-by='.lastTimestamp' 2>/dev/null | tail -5 | while read -r line; do
+                    echo -e "    $line"
+                done || echo -e "    ${YELLOW}No recent events found${NC}"
+                echo ""
+                
+                # Show APIs application status if available
+                if kubectl get application apis -n argocd >/dev/null 2>&1; then
+                    echo -e "  ${BLUE}APIs Application Diagnostics:${NC}"
+                    diagnose_argocd_app "apis" "argocd" 2>/dev/null || {
+                        echo -e "    ${YELLOW}Could not run detailed diagnostics${NC}"
+                        kubectl describe application apis -n argocd 2>/dev/null | tail -10 | while read -r line; do
+                            echo -e "    $line"
+                        done || echo -e "    ${YELLOW}Could not describe APIs application${NC}"
+                    }
+                fi
+            else
+                echo -e "    ${YELLOW}kubectl not available for diagnostics${NC}"
+            fi
+            
             ((FAILED++))
         fi
         echo ""
@@ -74,5 +143,12 @@ else
             echo -e "  $script"
         fi
     done
+    echo ""
+    echo -e "${YELLOW}For more detailed diagnostics:${NC}"
+    echo -e "  kubectl get applications -n argocd"
+    echo -e "  kubectl describe application apis -n argocd"
+    echo -e "  kubectl get crd | grep platform.bizmatters.io"
+    echo -e "  kubectl get composition"
+    echo -e "  kubectl get events --all-namespaces --sort-by='.lastTimestamp' | tail -20"
     exit 1
 fi

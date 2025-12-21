@@ -206,6 +206,43 @@ if [[ -f "$API_VALIDATION_SCRIPT" ]]; then
         echo -e "  ✅ ${GREEN}All Platform API validations passed${NC}"
     else
         echo -e "  ❌ ${RED}Platform API validation failed (exit code: $api_exit_code)${NC}"
+        echo ""
+        echo -e "  ${YELLOW}🔍 Additional diagnostics:${NC}"
+        
+        # Show ArgoCD applications overview
+        echo -e "  ${BLUE}ArgoCD Applications Overview:${NC}"
+        kubectl get applications -n argocd -o wide 2>/dev/null | while read -r line; do
+            echo -e "    $line"
+        done || echo -e "    ${YELLOW}Could not get ArgoCD applications${NC}"
+        echo ""
+        
+        # Show XRD status
+        echo -e "  ${BLUE}Platform XRDs Status:${NC}"
+        kubectl get crd | grep "platform.bizmatters.io" 2>/dev/null | while read -r line; do
+            echo -e "    $line"
+        done || echo -e "    ${YELLOW}No Platform XRDs found${NC}"
+        echo ""
+        
+        # Show Composition status
+        echo -e "  ${BLUE}Crossplane Compositions:${NC}"
+        kubectl get composition 2>/dev/null | while read -r line; do
+            echo -e "    $line"
+        done || echo -e "    ${YELLOW}No Compositions found${NC}"
+        echo ""
+        
+        # Show recent events
+        echo -e "  ${BLUE}Recent Events (last 10):${NC}"
+        kubectl get events --all-namespaces --sort-by='.lastTimestamp' 2>/dev/null | tail -10 | while read -r line; do
+            echo -e "    $line"
+        done || echo -e "    ${YELLOW}No recent events found${NC}"
+        echo ""
+        
+        echo -e "  ${YELLOW}For detailed debugging, run:${NC}"
+        echo -e "    ./scripts/bootstrap/validation/04-apis/validate-apis.sh"
+        echo -e "    kubectl describe application apis -n argocd"
+        echo -e "    kubectl logs -n argocd deployment/argocd-application-controller | grep -i error"
+        echo ""
+        
         ((FAILED++)) || true
     fi
 else
