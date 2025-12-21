@@ -1,0 +1,11 @@
+# Invalid claim - backendServiceName provided but backendServicePort missing
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: WebService
+metadata:
+  name: test-backend-no-port
+  namespace: test
+spec:
+  image: "nginx:1.25"
+  port: 80
+  backendServiceName: "api-service"
+  # Missing backendServicePort - should be required when backendServiceName is provided

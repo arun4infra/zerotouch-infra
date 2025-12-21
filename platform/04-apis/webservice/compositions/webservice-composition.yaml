@@ -149,6 +149,9 @@ spec:
                         command: ["/bin/bash", "-c"]
                         args: ["echo 'No init container configured'"]
                         envFrom:
+                          - configMapRef:
+                              name: placeholder-backend-config
+                              optional: true
                           - secretRef:
                               name: placeholder-secret1
                               optional: true
@@ -182,6 +185,9 @@ spec:
                             containerPort: 8080
                             protocol: TCP
                         envFrom:
+                          - configMapRef:
+                              name: placeholder-backend-config
+                              optional: true
                           - secretRef:
                               name: placeholder-secret1
                               optional: true
@@ -324,30 +330,51 @@ spec:
           toFieldPath: spec.forProvider.manifest.spec.template.spec.imagePullSecrets
           policy:
             fromFieldPath: Optional
-        # Patch secret slots (envFrom - bulk mounting)
+        # Patch ConfigMap reference for backend service URL
         - type: FromCompositeFieldPath
-          fromFieldPath: spec.secret1Name
-          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[0].secretRef.name
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[0].configMapRef.name
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%s-backend-config"
           policy:
             fromFieldPath: Optional
         - type: FromCompositeFieldPath
-          fromFieldPath: spec.secret2Name
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.initContainers[0].envFrom[0].configMapRef.name
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%s-backend-config"
+          policy:
+            fromFieldPath: Optional
+        # Patch secret slots (envFrom - bulk mounting) - updated indices for ConfigMap at index 0
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret1Name
           toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[1].secretRef.name
           policy:
             fromFieldPath: Optional
         - type: FromCompositeFieldPath
-          fromFieldPath: spec.secret3Name
+          fromFieldPath: spec.secret2Name
           toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[2].secretRef.name
           policy:
             fromFieldPath: Optional
         - type: FromCompositeFieldPath
-          fromFieldPath: spec.secret4Name
+          fromFieldPath: spec.secret3Name
           toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[3].secretRef.name
           policy:
             fromFieldPath: Optional
         - type: FromCompositeFieldPath
-          fromFieldPath: spec.secret5Name
+          fromFieldPath: spec.secret4Name
           toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[4].secretRef.name
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.secret5Name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].envFrom[5].secretRef.name
           policy:
             fromFieldPath: Optional
         # Patch health check paths
@@ -390,7 +417,95 @@ spec:
             type: Ready
             status: "True"
 
-    # Resource 4: Service
+    # Resource 4: Backend Service ConfigMap (conditional - only if backendServiceName is provided)
+    - name: backend-config
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha2
+        kind: Object
+        spec:
+          providerConfigRef:
+            name: kubernetes-provider
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: ConfigMap
+              metadata:
+                name: placeholder-backend-config
+                namespace: placeholder
+                labels:
+                  app.kubernetes.io/name: placeholder
+                  app.kubernetes.io/component: web-service
+                  app.kubernetes.io/managed-by: crossplane
+              data:
+                BACKEND_SERVICE_URL: ""
+                BACKEND_SERVICE_NAME: ""
+                BACKEND_SERVICE_NAMESPACE: ""
+                BACKEND_SERVICE_PORT: ""
+      patches:
+        # Patch name and namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%s-backend-config"
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        # Patch labels
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.name
+          toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
+        # Store individual components and generate backend service URL
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.backendServiceName
+          toFieldPath: spec.forProvider.manifest.data.BACKEND_SERVICE_NAME
+          policy:
+            fromFieldPath: Required
+        # Use explicit namespace or default to claim namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.backendServiceNamespace
+          toFieldPath: spec.forProvider.manifest.data.BACKEND_SERVICE_NAMESPACE
+          policy:
+            fromFieldPath: Optional
+        # Fallback to claim namespace if backendServiceNamespace not provided
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.claimRef.namespace
+          toFieldPath: spec.forProvider.manifest.data.BACKEND_SERVICE_NAMESPACE
+          policy:
+            fromFieldPath: Optional
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.backendServicePort
+          toFieldPath: spec.forProvider.manifest.data.BACKEND_SERVICE_PORT
+          transforms:
+            - type: string
+              string:
+                type: Format
+                fmt: "%d"
+          policy:
+            fromFieldPath: Required
+        # Generate complete backend service URL - this will use the last set namespace value
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: spec.backendServiceName
+              - fromFieldPath: spec.claimRef.namespace  # Always use claim namespace for now
+              - fromFieldPath: spec.backendServicePort
+            strategy: string
+            string:
+              fmt: "http://%s.%s.svc.cluster.local:%d"
+          toFieldPath: spec.forProvider.manifest.data.BACKEND_SERVICE_URL
+          policy:
+            fromFieldPath: Required
+      readinessChecks:
+        - type: MatchCondition
+          matchCondition:
+            type: Ready
+            status: "True"
+
+    # Resource 5: Service
     - name: service
       base:
         apiVersion: kubernetes.crossplane.io/v1alpha2
@@ -411,6 +526,7 @@ spec:
                   app.kubernetes.io/managed-by: crossplane
               spec:
                 type: ClusterIP
+                sessionAffinity: None
                 selector:
                   app.kubernetes.io/name: placeholder
                 ports:
@@ -437,13 +553,19 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: spec.port
           toFieldPath: spec.forProvider.manifest.spec.ports[0].port
+        # Patch session affinity
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.sessionAffinity
+          toFieldPath: spec.forProvider.manifest.spec.sessionAffinity
+          policy:
+            fromFieldPath: Optional
       readinessChecks:
         - type: MatchCondition
           matchCondition:
             type: Ready
             status: "True"
 
-    # Resource 5: HTTPRoute (conditional - only if hostname is provided)
+    # Resource 6: HTTPRoute (conditional - only if hostname is provided)
     - name: httproute
       base:
         apiVersion: kubernetes.crossplane.io/v1alpha2

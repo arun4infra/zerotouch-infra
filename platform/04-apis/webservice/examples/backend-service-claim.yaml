@@ -1,0 +1,87 @@
+# WebService with Backend Service Discovery
+#
+# This example demonstrates backend service discovery capabilities:
+# - References another service for internal communication
+# - Generates BACKEND_SERVICE_URL environment variable
+# - Uses session affinity for WebSocket support
+# - Suitable for services that need to communicate with other internal services
+
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: WebService
+metadata:
+  name: ide-orchestrator
+  namespace: intelligence-deepagents
+spec:
+  # Container configuration
+  image: "ghcr.io/org/ide-orchestrator:v1.0.0"
+  port: 8080
+  size: medium
+  replicas: 2
+  
+  # Backend service discovery configuration
+  backendServiceName: "deepagents-runtime-service"
+  backendServicePort: 8000
+  # backendServiceNamespace defaults to same namespace (intelligence-deepagents)
+  
+  # Session affinity for WebSocket connections
+  sessionAffinity: "ClientIP"
+  
+  # Database configuration
+  databaseName: "ide_orchestrator"
+  databaseSize: small
+  
+  # Secrets configuration
+  secret1Name: "ide-orchestrator-db-conn"
+  secret2Name: "ide-orchestrator-jwt-keys"
+  secret3Name: "ide-orchestrator-app-secrets"
+  
+  # External ingress
+  hostname: "api.bizmatters.com"
+  pathPrefix: "/api"
+  
+  # Health check configuration
+  healthPath: "/health"
+  readyPath: "/ready"
+
+# This creates:
+# - ServiceAccount: ide-orchestrator
+# - PostgresInstance: ide-orchestrator-db (small size)
+# - ConfigMap: ide-orchestrator-backend-config (contains BACKEND_SERVICE_URL)
+# - Deployment: ide-orchestrator (2 replicas, medium resources)
+# - Service: ide-orchestrator (ClusterIP with ClientIP session affinity)
+# - HTTPRoute: ide-orchestrator (external access via api.bizmatters.com/api)
+
+# Environment Variables Available in Container:
+# From ConfigMap (backend service):
+#   - BACKEND_SERVICE_URL=http://deepagents-runtime-service.intelligence-deepagents.svc.cluster.local:8000
+#   - BACKEND_SERVICE_NAME=deepagents-runtime-service
+#   - BACKEND_SERVICE_NAMESPACE=intelligence-deepagents
+#   - BACKEND_SERVICE_PORT=8000
+# From secret1Name (database):
+#   - endpoint, port, database, username, password
+# From secret2Name (JWT):
+#   - jwt_private_key, jwt_public_key, jwt_issuer
+# From secret3Name (app):
+#   - api_key, webhook_secret, encryption_key
+
+# Service Communication:
+# - Internal backend: http://deepagents-runtime-service.intelligence-deepagents.svc.cluster.local:8000
+# - External access: https://api.bizmatters.com/api
+# - Session affinity ensures WebSocket connections stick to same pod
+
+# Usage in Application Code:
+# const backendUrl = process.env.BACKEND_SERVICE_URL;
+# const response = await fetch(`${backendUrl}/api/agents`);
+
+# Deployment Instructions:
+# 1. Ensure deepagents-runtime-service exists in intelligence-deepagents namespace
+# 2. Ensure all secrets exist
+# 3. Apply claim: kubectl apply -f backend-service-claim.yaml
+# 4. Check status: kubectl get webservice ide-orchestrator -n intelligence-deepagents
+# 5. Verify ConfigMap: kubectl get configmap ide-orchestrator-backend-config -n intelligence-deepagents -o yaml
+# 6. Test backend connectivity: kubectl exec -it deployment/ide-orchestrator -n intelligence-deepagents -- curl $BACKEND_SERVICE_URL/health
+
+# Troubleshooting:
+# - Backend service not reachable: Check deepagents-runtime-service exists and is ready
+# - ConfigMap not created: Check backendServiceName and backendServicePort are provided
+# - Session affinity not working: Check Service has sessionAffinity: ClientIP

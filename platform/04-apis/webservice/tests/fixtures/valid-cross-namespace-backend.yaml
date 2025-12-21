@@ -1,0 +1,13 @@
+# Valid claim with cross-namespace backend service
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: WebService
+metadata:
+  name: test-cross-namespace
+  namespace: test
+spec:
+  image: "nginx:1.25"
+  port: 80
+  backendServiceName: "external-api"
+  backendServiceNamespace: "api-namespace"
+  backendServicePort: 9000
+  sessionAffinity: "None"
