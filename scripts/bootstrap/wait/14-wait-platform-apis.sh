@@ -117,10 +117,10 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
             echo -e "      ${BLUE}Local files:${NC}"
             if [ -d "$LOCAL_PATH" ]; then
                 echo -e "        ✓ Directory exists: $LOCAL_PATH"
-                if [ -f "$LOCAL_PATH/$XRD.yaml" ]; then
-                    echo -e "        ✓ XRD file exists: $LOCAL_PATH/$XRD.yaml"
+                if [ -f "$LOCAL_PATH/$XRD_NAME.yaml" ]; then
+                    echo -e "        ✓ XRD file exists: $LOCAL_PATH/$XRD_NAME.yaml"
                 else
-                    echo -e "        ✗ XRD file missing: $LOCAL_PATH/$XRD.yaml"
+                    echo -e "        ✗ XRD file missing: $LOCAL_PATH/$XRD_NAME.yaml"
                     echo -e "        Available files:"
                     ls -la "$LOCAL_PATH/" 2>/dev/null | sed 's/^/          /' || echo -e "          Could not list files"
                 fi
