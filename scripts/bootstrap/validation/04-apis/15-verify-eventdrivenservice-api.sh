@@ -10,6 +10,9 @@
 
 set -e
 
+# Find repository root (where .git directory exists)
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && git rev-parse --show-toplevel 2>/dev/null || echo "$(cd ../../../.. && pwd)")"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -146,7 +149,7 @@ echo ""
 # 4. Test EventDrivenService claim validation using test fixtures
 echo -e "${BLUE}Testing EventDrivenService claim validation...${NC}"
 
-EVENTDRIVENSERVICE_DIR="platform/04-apis/event-driven-service"
+EVENTDRIVENSERVICE_DIR="$REPO_ROOT/platform/04-apis/event-driven-service"
 
 # Create temporary namespace for testing (if it doesn't exist)
 kubectl create namespace test --dry-run=client -o yaml | kubectl apply -f - &>/dev/null || true
@@ -183,7 +186,7 @@ echo ""
 # 5. Verify schema file published
 echo -e "${BLUE}Verifying schema file...${NC}"
 
-SCHEMA_FILE="platform/04-apis/event-driven-service/schemas/eventdrivenservice.schema.json"
+SCHEMA_FILE="$REPO_ROOT/platform/04-apis/event-driven-service/schemas/eventdrivenservice.schema.json"
 if [ -f "$SCHEMA_FILE" ]; then
     echo -e "${GREEN}✓ Schema file exists at $SCHEMA_FILE${NC}"
     
@@ -220,9 +223,9 @@ if [ $ERRORS -eq 0 ] && [ $WARNINGS -eq 0 ]; then
     echo -e "${GREEN}✓ All checks passed! EventDrivenService API is ready.${NC}"
     echo ""
     echo -e "${BLUE}ℹ  Next steps:${NC}"
-    echo "  - Validate example claims: ./scripts/validate-claim.sh platform/04-apis/examples/minimal-claim.yaml"
-    echo "  - Test deployment: kubectl apply -f platform/04-apis/examples/minimal-claim.yaml"
-    echo "  - Run composition tests: ./platform/04-apis/tests/verify-composition.sh"
+    echo "  - Validate example claims: ./scripts/validate-claim.sh $REPO_ROOT/platform/04-apis/examples/minimal-claim.yaml"
+    echo "  - Test deployment: kubectl apply -f $REPO_ROOT/platform/04-apis/examples/minimal-claim.yaml"
+    echo "  - Run composition tests: $REPO_ROOT/platform/04-apis/tests/verify-composition.sh"
     exit 0
 elif [ $ERRORS -eq 0 ]; then
     echo -e "${YELLOW}⚠️  EventDrivenService API has $WARNINGS warning(s) but no errors${NC}"

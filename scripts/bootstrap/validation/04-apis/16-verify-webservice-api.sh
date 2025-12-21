@@ -11,6 +11,9 @@
 
 set -e
 
+# Find repository root (where .git directory exists)
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && git rev-parse --show-toplevel 2>/dev/null || echo "$(cd ../../../.. && pwd)")"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -169,7 +172,7 @@ echo ""
 # 5. Test claim validation using test fixtures
 echo -e "${BLUE}Testing WebService claim validation...${NC}"
 
-WEBSERVICE_DIR="platform/04-apis/webservice"
+WEBSERVICE_DIR="$REPO_ROOT/platform/04-apis/webservice"
 
 # Create temporary namespace for testing (if it doesn't exist)
 kubectl create namespace test --dry-run=client -o yaml | kubectl apply -f - &>/dev/null || true
@@ -235,9 +238,9 @@ if [ $ERRORS -eq 0 ] && [ $WARNINGS -eq 0 ]; then
     echo -e "${GREEN}✓ All checks passed! WebService API is ready.${NC}"
     echo ""
     echo -e "${BLUE}ℹ  Next steps:${NC}"
-    echo "  - Validate example claims: ./platform/04-apis/webservice/scripts/validate-claim.sh platform/04-apis/webservice/examples/minimal-claim.yaml"
-    echo "  - Test deployment: kubectl apply -f platform/04-apis/webservice/examples/minimal-claim.yaml"
-    echo "  - Run test suite: ./platform/04-apis/webservice/scripts/validate-claim.sh --test"
+    echo "  - Validate example claims: $REPO_ROOT/platform/04-apis/webservice/scripts/validate-claim.sh $REPO_ROOT/platform/04-apis/webservice/examples/minimal-claim.yaml"
+    echo "  - Test deployment: kubectl apply -f $REPO_ROOT/platform/04-apis/webservice/examples/minimal-claim.yaml"
+    echo "  - Run test suite: $REPO_ROOT/platform/04-apis/webservice/scripts/validate-claim.sh --test"
     exit 0
 elif [ $ERRORS -eq 0 ]; then
     echo -e "${YELLOW}⚠️  WebService API has $WARNINGS warning(s) but no errors${NC}"
