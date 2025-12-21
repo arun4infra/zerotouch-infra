@@ -33,15 +33,21 @@ for script in "$SCRIPT_DIR"/[0-9][0-9]-*.sh; do
         api_name=$(echo "$script_name" | sed 's/[0-9][0-9]-verify-\(.*\)-api\.sh/\1/')
         
         echo -e "${BLUE}Validating: ${api_name} API${NC}"
+        echo "  - Script: $script"
+        echo "  - API name: $api_name"
+        echo "  - Script executable: $(test -x "$script" && echo 'yes' || echo 'no')"
         ((TOTAL++))
         
         chmod +x "$script"
         # Run script and show all output, capture exit code
+        echo "  - Executing: $script"
         if "$script" 2>&1; then
             echo -e "  ✅ ${GREEN}${api_name} API validation passed${NC}"
         else
-            echo -e "  ❌ ${RED}${api_name} API validation failed${NC}"
+            validation_exit_code=$?
+            echo -e "  ❌ ${RED}${api_name} API validation failed (exit code: $validation_exit_code)${NC}"
             echo -e "  ${YELLOW}See detailed error output above${NC}"
+            echo -e "  ${YELLOW}Debug: kubectl context=$(kubectl config current-context 2>&1 || echo 'none')${NC}"
             ((FAILED++))
         fi
         echo ""

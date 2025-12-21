@@ -170,17 +170,31 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Run Platform API validations
 if [[ -f "$SCRIPT_DIR/04-apis/validate-apis.sh" ]]; then
-    # Run with output visible for debugging
     echo -e "${BLUE}Running Platform API validation...${NC}"
-    if "$SCRIPT_DIR/04-apis/validate-apis.sh" 2>&1; then
+    echo "  - Script path: $SCRIPT_DIR/04-apis/validate-apis.sh"
+    echo "  - Script exists: $(test -f "$SCRIPT_DIR/04-apis/validate-apis.sh" && echo 'yes' || echo 'no')"
+    echo "  - Script executable: $(test -x "$SCRIPT_DIR/04-apis/validate-apis.sh" && echo 'yes' || echo 'no')"
+    
+    # Execute with detailed error capture
+    echo -e "${BLUE}Executing API validation (with full output)...${NC}"
+    if "$SCRIPT_DIR/04-apis/validate-apis.sh"; then
         echo -e "  ✅ ${GREEN}Platform APIs${NC}: All validations passed"
     else
-        echo -e "  ❌ ${RED}Platform APIs${NC}: Some validations failed"
+        validation_exit_code=$?
+        echo -e "  ❌ ${RED}Platform APIs${NC}: Some validations failed (exit code: $validation_exit_code)"
         echo -e "  ${YELLOW}Check the detailed output above for specific errors${NC}"
+        echo -e "  ${YELLOW}Debug info:${NC}"
+        echo "    - kubectl context: $(kubectl config current-context 2>&1 || echo 'no context')"
+        echo "    - ArgoCD apps: $(kubectl get applications -n argocd --no-headers 2>&1 | wc -l || echo '0') applications found"
+        echo "    - Available validation scripts:"
+        ls -la "$SCRIPT_DIR/04-apis/"[0-9][0-9]-*.sh 2>/dev/null || echo "      No validation scripts found"
         ((FAILED++)) || true
     fi
 else
     echo -e "  ⚠️  ${YELLOW}Platform APIs${NC}: Validation script not found"
+    echo "  - Expected path: $SCRIPT_DIR/04-apis/validate-apis.sh"
+    echo "  - Directory contents:"
+    ls -la "$SCRIPT_DIR/04-apis/" 2>/dev/null || echo "    Directory not found"
 fi
 
 echo ""
