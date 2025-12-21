@@ -161,7 +161,30 @@ fi
 
 echo ""
 
-# 5. Check for OutOfSync applications
+# 6. Platform API Validation
+echo "🔧 Platform API Validation:"
+echo "------------------------------------------"
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Run Platform API validations
+if [[ -f "$SCRIPT_DIR/04-apis/validate-apis.sh" ]]; then
+    # Run with output visible for debugging
+    if "$SCRIPT_DIR/04-apis/validate-apis.sh"; then
+        echo -e "  ✅ ${GREEN}Platform APIs${NC}: All validations passed"
+    else
+        echo -e "  ❌ ${RED}Platform APIs${NC}: Some validations failed"
+        echo -e "  ${YELLOW}Run for details: $SCRIPT_DIR/04-apis/validate-apis.sh${NC}"
+        ((FAILED++)) || true
+    fi
+else
+    echo -e "  ⚠️  ${YELLOW}Platform APIs${NC}: Validation script not found"
+fi
+
+echo ""
+
+# 7. Check for OutOfSync applications
 echo "🔄 Checking for Configuration Drift:"
 echo "------------------------------------------"
 
@@ -206,7 +229,7 @@ fi
 
 echo ""
 
-# 6. Final Summary
+# 8. Final Summary
 echo "=========================================="
 if [[ $FAILED -eq 0 ]]; then
     echo -e "✅ ${GREEN}VALIDATION PASSED${NC}"
