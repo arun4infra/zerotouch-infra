@@ -220,7 +220,7 @@ while [ $ELAPSED -lt $TIMEOUT ]; do
             fi
             
         # Check if CRD directory exists in the repo
-        local service_name=$(echo "$XRD_NAME" | sed 's/^x//')  # Remove 'x' prefix
+        service_name=$(echo "$XRD_NAME" | sed 's/^x//')  # Remove 'x' prefix
         if [ -d "platform/04-apis/$service_name/definitions" ]; then
             echo -e "      ${GREEN}✓ XRD definition files exist locally${NC}"
         else
