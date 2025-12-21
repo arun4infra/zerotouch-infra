@@ -241,6 +241,37 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.nats.consumer
                 toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[2].value
+              
+              # Patch HTTP port (optional - defaults to 8080)
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.httpPort
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].ports[0].containerPort
+                policy:
+                  fromFieldPath: Optional
+              
+              # Patch health check paths (optional - defaults to /health and /ready)
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.healthPath
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].livenessProbe.httpGet.path
+                policy:
+                  fromFieldPath: Optional
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.readyPath
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].readinessProbe.httpGet.path
+                policy:
+                  fromFieldPath: Optional
+              
+              # Patch health check port to match httpPort (optional)
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.httpPort
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].livenessProbe.httpGet.port
+                policy:
+                  fromFieldPath: Optional
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.httpPort
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].readinessProbe.httpGet.port
+                policy:
+                  fromFieldPath: Optional
               # Patch imagePullSecrets
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.imagePullSecrets
@@ -327,6 +358,73 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.claimRef.name
                 toFieldPath: spec.forProvider.manifest.spec.selector[app.kubernetes.io/name]
+            readinessChecks:
+              - type: MatchCondition
+                matchCondition:
+                  type: Ready
+                  status: "True"
+
+          # Resource 3a: HTTP Service (conditional - only when httpPort specified)
+          - name: http-service
+            base:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              spec:
+                providerConfigRef:
+                  name: kubernetes-provider
+                forProvider:
+                  manifest:
+                    apiVersion: v1
+                    kind: Service
+                    metadata:
+                      name: placeholder-http
+                      namespace: placeholder
+                      labels:
+                        app.kubernetes.io/name: placeholder
+                        app.kubernetes.io/component: event-driven-worker
+                        app.kubernetes.io/managed-by: crossplane
+                    spec:
+                      type: ClusterIP
+                      sessionAffinity: None
+                      selector:
+                        app.kubernetes.io/name: placeholder
+                      ports:
+                        - name: http
+                          port: 8000
+                          targetPort: http
+                          protocol: TCP
+            patches:
+              # Only create if httpPort is specified
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.httpPort
+                toFieldPath: spec.forProvider.manifest.spec.ports[0].port
+                policy:
+                  fromFieldPath: Required
+              # Patch name with -http suffix
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.claimRef.name
+                toFieldPath: spec.forProvider.manifest.metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-http"
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.claimRef.namespace
+                toFieldPath: spec.forProvider.manifest.metadata.namespace
+              # Patch labels
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.claimRef.name
+                toFieldPath: spec.forProvider.manifest.metadata.labels[app.kubernetes.io/name]
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.claimRef.name
+                toFieldPath: spec.forProvider.manifest.spec.selector[app.kubernetes.io/name]
+              # Patch session affinity
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.sessionAffinity
+                toFieldPath: spec.forProvider.manifest.spec.sessionAffinity
+                policy:
+                  fromFieldPath: Optional
             readinessChecks:
               - type: MatchCondition
                 matchCondition:

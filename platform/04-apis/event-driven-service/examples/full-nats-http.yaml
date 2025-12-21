@@ -1,0 +1,64 @@
+# Full EventDrivenService Claim - NATS + HTTP Endpoints
+# This example demonstrates all features including HTTP endpoints alongside NATS consumers.
+# Shows both event-driven processing and request-response patterns in one service.
+
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: EventDrivenService
+metadata:
+  name: deepagents-runtime
+  namespace: intelligence-deepagents
+spec:
+  # Container image from private registry
+  image: ghcr.io/org/deepagents-runtime:v1.0.0
+  
+  # Resource size (medium allocation for typical workloads)
+  size: medium
+  
+  # NATS JetStream configuration (required)
+  nats:
+    url: nats://nats.nats.svc:4222
+    stream: AGENT_EXECUTION
+    consumer: deepagents-runtime-workers
+  
+  # HTTP endpoint configuration (optional - enables HTTP/WebSocket alongside NATS)
+  httpPort: 8000
+  healthPath: "/health"
+  readyPath: "/ready"
+  sessionAffinity: "None"
+  
+  # Secrets for database, cache, and application configuration
+  secret1Name: deepagents-runtime-db-conn
+  secret2Name: deepagents-runtime-llm-keys
+  secret3Name: deepagents-runtime-app-secrets
+  
+  # Image pull secrets for private registry
+  imagePullSecrets:
+    - name: ghcr-pull-secret
+
+# Resources Created:
+# - ServiceAccount (deepagents-runtime)
+# - Deployment with:
+#   - Main container (processes NATS messages AND handles HTTP requests)
+#   - HTTP port: 8000 (configurable)
+#   - Health probes: /health (liveness), /ready (readiness)
+#   - Resource limits: 500m-2000m CPU, 1Gi-4Gi memory
+#   - Security context: runAsNonRoot, drop all capabilities
+# - Service (ClusterIP:8080) - standard service for backward compatibility
+# - HTTP Service (ClusterIP:8000) - dedicated HTTP service with session affinity
+# - ScaledObject (KEDA autoscaling 1-10 replicas based on NATS queue depth)
+
+# Service Communication:
+# - NATS Consumer: Processes events from AGENT_EXECUTION stream
+# - HTTP Server: Handles REST API requests on port 8000
+# - WebSocket Support: Enabled through standard HTTP configuration
+# - Session Affinity: None (stateless) - can be set to ClientIP for WebSocket persistence
+
+# Health Endpoints:
+# - GET /health (liveness probe on port 8000)
+# - GET /ready (readiness probe on port 8000)
+
+# Environment Variables Available:
+# From NATS config:
+#   - NATS_URL, NATS_STREAM_NAME, NATS_CONSUMER_GROUP
+# From secrets:
+#   - Database credentials, LLM API keys, application secrets

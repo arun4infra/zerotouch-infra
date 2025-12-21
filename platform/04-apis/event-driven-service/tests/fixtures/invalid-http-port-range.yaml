@@ -1,0 +1,18 @@
+# Invalid EventDrivenService - HTTP Port Out of Range
+# This test case should FAIL validation due to httpPort exceeding maximum value
+
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: EventDrivenService
+metadata:
+  name: invalid-http-port
+  namespace: test
+spec:
+  image: nginx:alpine
+  size: small
+  nats:
+    url: nats://nats.nats.svc:4222
+    stream: TEST_STREAM
+    consumer: test-consumer
+  
+  # Invalid: httpPort exceeds maximum of 65535
+  httpPort: 99999

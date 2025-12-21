@@ -1,0 +1,19 @@
+# Invalid EventDrivenService - Invalid Health Path Pattern
+# This test case should FAIL validation due to healthPath not starting with '/'
+
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: EventDrivenService
+metadata:
+  name: invalid-health-path
+  namespace: test
+spec:
+  image: nginx:alpine
+  size: small
+  nats:
+    url: nats://nats.nats.svc:4222
+    stream: TEST_STREAM
+    consumer: test-consumer
+  
+  httpPort: 8000
+  # Invalid: healthPath must start with '/'
+  healthPath: "health"

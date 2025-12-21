@@ -1,0 +1,21 @@
+# Valid EventDrivenService - HTTP Full Configuration
+# This test case should PASS validation with all HTTP fields specified
+
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: EventDrivenService
+metadata:
+  name: valid-http-full
+  namespace: test
+spec:
+  image: nginx:alpine
+  size: medium
+  nats:
+    url: nats://nats.nats.svc:4222
+    stream: TEST_STREAM
+    consumer: test-consumer
+  
+  # Full HTTP configuration
+  httpPort: 9000
+  healthPath: "/api/health"
+  readyPath: "/api/ready"
+  sessionAffinity: "ClientIP"

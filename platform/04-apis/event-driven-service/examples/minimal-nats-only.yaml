@@ -1,0 +1,33 @@
+# Minimal EventDrivenService Claim - NATS Only (Backward Compatibility)
+# This example demonstrates backward compatibility with existing NATS-only deployments.
+# No HTTP endpoints are exposed - only NATS consumer functionality.
+
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: EventDrivenService
+metadata:
+  name: nats-only-worker
+  namespace: workers
+spec:
+  # Container image (public registry, no authentication required)
+  image: nginx:alpine
+  
+  # Resource size (small allocation for lightweight workers)
+  size: small
+  
+  # NATS JetStream configuration (required)
+  nats:
+    url: nats://nats.nats.svc:4222
+    stream: SIMPLE_JOBS
+    consumer: nats-only-workers
+
+# Resources Created:
+# - Deployment (1 replica, KEDA-managed)
+# - Service (ClusterIP:8080) - standard service for backward compatibility
+# - ScaledObject (1-10 replicas based on NATS queue depth)
+# - ServiceAccount
+# 
+# NO HTTP Service created (httpPort not specified)
+
+# Health Endpoints Required:
+# - GET /health (liveness probe on port 8080)
+# - GET /ready (readiness probe on port 8080)
