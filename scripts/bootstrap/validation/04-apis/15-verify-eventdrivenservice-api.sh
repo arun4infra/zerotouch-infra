@@ -10,8 +10,10 @@
 
 set -e
 
-# Find repository root (where .git directory exists)
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && git rev-parse --show-toplevel 2>/dev/null || echo "$(cd ../../../.. && pwd)")"
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Navigate to repo root from script location (4 levels up from scripts/bootstrap/validation/04-apis/)
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 # Colors
 RED='\033[0;31m'

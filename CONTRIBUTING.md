@@ -2,6 +2,11 @@
 
 This guide covers key patterns, architectural decisions, and best practices for contributing to the ZeroTouch Platform. It's based on real implementation experience from creating new platform APIs like the WebService XRD.
 
+## Philosophy
+
+- README.md
+- docs/architecture/platform-overview.md
+
 ## Table of Contents
 
 - [Platform Architecture Overview](#platform-architecture-overview)
