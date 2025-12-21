@@ -378,7 +378,7 @@ test_session_affinity_config() {
     echo "Testing session affinity configuration..."
     
     # Check that Service has sessionAffinity field
-    if ! grep -A 10 "kind: Service" "${COMPOSITION_FILE}" | grep -q "sessionAffinity:"; then
+    if ! grep -A 20 "kind: Service" "${COMPOSITION_FILE}" | grep -q "sessionAffinity:"; then
         echo "ERROR: sessionAffinity field not found in Service resource"
         return 1
     fi

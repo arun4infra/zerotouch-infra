@@ -51,6 +51,29 @@ main() {
     echo "IDE Orchestrator Service: $IDE_ORCHESTRATOR_SERVICE"
     echo "================================================================================"
     
+    # Check if running in preview mode
+    if kubectl config current-context | grep -q "kind-zerotouch-preview"; then
+        log_info "Preview mode detected - skipping e2e communication validation"
+        log_info "This validation requires production namespaces and services"
+        echo ""
+        echo "================================================================================"
+        echo "Validation Summary"
+        echo "================================================================================"
+        echo ""
+        echo "Tests run:    0 (skipped in preview mode)"
+        echo "Tests passed: 0"
+        echo "Tests failed: 0"
+        echo ""
+        echo "✓ E2E communication validation skipped (preview mode)"
+        echo ""
+        echo "In preview mode, this validation is not applicable as it requires:"
+        echo "- intelligence-deepagents namespace"
+        echo "- deepagents-runtime-http service"
+        echo "- Production tenant deployments"
+        echo ""
+        exit 0
+    fi
+    
     # Prerequisites check
     log_info "Checking prerequisites..."
     
