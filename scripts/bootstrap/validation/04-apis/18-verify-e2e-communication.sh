@@ -51,8 +51,13 @@ main() {
     echo "IDE Orchestrator Service: $IDE_ORCHESTRATOR_SERVICE"
     echo "================================================================================"
     
-    # Check if running in preview mode
-    if kubectl config current-context | grep -q "kind-zerotouch-preview"; then
+    # Check if running in preview mode (check node name instead of context)
+    IS_PREVIEW_MODE=false
+    if kubectl get nodes -o name 2>/dev/null | grep -q "zerotouch-preview"; then
+        IS_PREVIEW_MODE=true
+    fi
+    
+    if [ "$IS_PREVIEW_MODE" = true ]; then
         log_info "Preview mode detected - skipping e2e communication validation"
         log_info "This validation requires production namespaces and services"
         echo ""
