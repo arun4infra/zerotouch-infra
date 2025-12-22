@@ -1,0 +1,90 @@
+# WebService with Cross-Namespace Backend Service Discovery
+#
+# This example demonstrates cross-namespace service communication:
+# - References a service in a different namespace
+# - Explicit namespace specification for backend service
+# - Suitable for services that need to communicate across namespace boundaries
+
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: WebService
+metadata:
+  name: frontend-service
+  namespace: web-tier
+spec:
+  # Container configuration
+  image: "ghcr.io/org/frontend-service:v1.0.0"
+  port: 3000
+  size: small
+  replicas: 3
+  
+  # Cross-namespace backend service discovery
+  backendServiceName: "api-gateway"
+  backendServiceNamespace: "api-tier"  # Explicit namespace reference
+  backendServicePort: 8080
+  
+  # No session affinity needed for stateless HTTP calls
+  sessionAffinity: "None"
+  
+  # No database needed for frontend service
+  
+  # Secrets for API keys and configuration
+  secret1Name: "frontend-service-api-keys"
+  secret2Name: "frontend-service-config"
+  
+  # External ingress for public access
+  hostname: "app.bizmatters.com"
+  pathPrefix: "/"
+  
+  # Health check configuration
+  healthPath: "/health"
+  readyPath: "/ready"
+
+# This creates:
+# - ServiceAccount: frontend-service
+# - ConfigMap: frontend-service-backend-config (contains cross-namespace URL)
+# - Deployment: frontend-service (3 replicas, small resources)
+# - Service: frontend-service (ClusterIP with no session affinity)
+# - HTTPRoute: frontend-service (external access via app.bizmatters.com)
+
+# Environment Variables Available in Container:
+# From ConfigMap (backend service):
+#   - BACKEND_SERVICE_URL=http://api-gateway.api-tier.svc.cluster.local:8080
+#   - BACKEND_SERVICE_NAME=api-gateway
+#   - BACKEND_SERVICE_NAMESPACE=api-tier
+#   - BACKEND_SERVICE_PORT=8080
+# From secret1Name (API keys):
+#   - api_key, client_secret, oauth_token
+# From secret2Name (config):
+#   - feature_flags, environment, log_level
+
+# Service Communication:
+# - Cross-namespace backend: http://api-gateway.api-tier.svc.cluster.local:8080
+# - External access: https://app.bizmatters.com
+# - No session affinity for stateless frontend
+
+# Network Policy Considerations:
+# - Ensure network policies allow traffic from web-tier to api-tier
+# - Consider using NetworkPolicy to restrict cross-namespace communication
+
+# Usage in Application Code:
+# const apiUrl = process.env.BACKEND_SERVICE_URL;
+# const response = await fetch(`${apiUrl}/api/v1/data`);
+
+# Deployment Instructions:
+# 1. Ensure api-gateway service exists in api-tier namespace
+# 2. Ensure network policies allow cross-namespace communication
+# 3. Ensure all secrets exist in web-tier namespace
+# 4. Apply claim: kubectl apply -f cross-namespace-backend-claim.yaml
+# 5. Check status: kubectl get webservice frontend-service -n web-tier
+# 6. Verify ConfigMap: kubectl get configmap frontend-service-backend-config -n web-tier -o yaml
+# 7. Test cross-namespace connectivity: kubectl exec -it deployment/frontend-service -n web-tier -- curl $BACKEND_SERVICE_URL/health
+
+# Security Considerations:
+# - Cross-namespace communication should be explicitly allowed via NetworkPolicy
+# - Consider using service mesh for better security and observability
+# - Ensure proper RBAC for cross-namespace service discovery
+
+# Troubleshooting:
+# - Backend service not reachable: Check api-gateway exists in api-tier namespace
+# - Network connectivity issues: Check NetworkPolicy allows web-tier → api-tier traffic
+# - DNS resolution issues: Verify cluster DNS is working correctly

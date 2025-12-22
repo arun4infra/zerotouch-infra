@@ -1,0 +1,10 @@
+# Invalid claim - invalid sessionAffinity value
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: WebService
+metadata:
+  name: test-invalid-session-affinity
+  namespace: test
+spec:
+  image: "nginx:1.25"
+  port: 80
+  sessionAffinity: "InvalidValue"  # Should only be "None" or "ClientIP"

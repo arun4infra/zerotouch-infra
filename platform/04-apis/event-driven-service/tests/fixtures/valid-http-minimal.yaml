@@ -1,0 +1,18 @@
+# Valid EventDrivenService - HTTP Minimal Configuration
+# This test case should PASS validation with minimal HTTP configuration
+
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: EventDrivenService
+metadata:
+  name: valid-http-minimal
+  namespace: test
+spec:
+  image: nginx:alpine
+  size: small
+  nats:
+    url: nats://nats.nats.svc:4222
+    stream: TEST_STREAM
+    consumer: test-consumer
+  
+  # Minimal HTTP configuration - only httpPort specified
+  httpPort: 8000

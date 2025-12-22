@@ -161,7 +161,98 @@ fi
 
 echo ""
 
-# 5. Check for OutOfSync applications
+# 6. Platform API Validation
+echo "🔧 Platform API Validation:"
+echo "------------------------------------------"
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Wait for Platform API XRDs to be ready before validation
+echo -e "${BLUE}Waiting for Platform API XRDs to be ready...${NC}"
+WAIT_SCRIPT="$SCRIPT_DIR/../wait/14-wait-platform-apis.sh"
+if [[ -f "$WAIT_SCRIPT" ]]; then
+    if "$WAIT_SCRIPT" --timeout 300; then
+        echo -e "${GREEN}✓ Platform API XRDs are ready${NC}"
+    else
+        echo -e "${RED}❌ Platform API XRDs failed to become ready within timeout${NC}"
+        echo -e "${RED}Cannot proceed with validation - required XRDs are not available${NC}"
+        ((FAILED++)) || true
+        exit 1
+    fi
+else
+    echo -e "${RED}❌ Platform API wait script not found${NC}"
+    ((FAILED++)) || true
+    exit 1
+fi
+echo ""
+
+
+# Run comprehensive API validation
+API_VALIDATION_SCRIPT="$SCRIPT_DIR/04-apis/validate-apis.sh"
+echo -e "${BLUE}Running comprehensive Platform API validation...${NC}"
+
+if [[ -f "$API_VALIDATION_SCRIPT" ]]; then
+    # Make executable and run
+    chmod +x "$API_VALIDATION_SCRIPT"
+    
+    # Capture both stdout and stderr, preserve exit code
+    set +e
+    "$API_VALIDATION_SCRIPT" 2>&1
+    api_exit_code=$?
+    set -e
+    
+    if [ $api_exit_code -eq 0 ]; then
+        echo -e "  ✅ ${GREEN}All Platform API validations passed${NC}"
+    else
+        echo -e "  ❌ ${RED}Platform API validation failed (exit code: $api_exit_code)${NC}"
+        echo ""
+        echo -e "  ${YELLOW}🔍 Additional diagnostics:${NC}"
+        
+        # Show ArgoCD applications overview
+        echo -e "  ${BLUE}ArgoCD Applications Overview:${NC}"
+        kubectl get applications -n argocd -o wide 2>/dev/null | while read -r line; do
+            echo -e "    $line"
+        done || echo -e "    ${YELLOW}Could not get ArgoCD applications${NC}"
+        echo ""
+        
+        # Show XRD status
+        echo -e "  ${BLUE}Platform XRDs Status:${NC}"
+        kubectl get crd | grep "platform.bizmatters.io" 2>/dev/null | while read -r line; do
+            echo -e "    $line"
+        done || echo -e "    ${YELLOW}No Platform XRDs found${NC}"
+        echo ""
+        
+        # Show Composition status
+        echo -e "  ${BLUE}Crossplane Compositions:${NC}"
+        kubectl get composition 2>/dev/null | while read -r line; do
+            echo -e "    $line"
+        done || echo -e "    ${YELLOW}No Compositions found${NC}"
+        echo ""
+        
+        # Show recent events
+        echo -e "  ${BLUE}Recent Events (last 10):${NC}"
+        kubectl get events --all-namespaces --sort-by='.lastTimestamp' 2>/dev/null | tail -10 | while read -r line; do
+            echo -e "    $line"
+        done || echo -e "    ${YELLOW}No recent events found${NC}"
+        echo ""
+        
+        echo -e "  ${YELLOW}For detailed debugging, run:${NC}"
+        echo -e "    ./scripts/bootstrap/validation/04-apis/validate-apis.sh"
+        echo -e "    kubectl describe application apis -n argocd"
+        echo -e "    kubectl logs -n argocd deployment/argocd-application-controller | grep -i error"
+        echo ""
+        
+        ((FAILED++)) || true
+    fi
+else
+    echo -e "  ❌ ${RED}Platform API validation script not found${NC}"
+    ((FAILED++)) || true
+fi
+
+echo ""
+
+# 7. Check for OutOfSync applications
 echo "🔄 Checking for Configuration Drift:"
 echo "------------------------------------------"
 
@@ -206,7 +297,7 @@ fi
 
 echo ""
 
-# 6. Final Summary
+# 8. Final Summary
 echo "=========================================="
 if [[ $FAILED -eq 0 ]]; then
     echo -e "✅ ${GREEN}VALIDATION PASSED${NC}"
@@ -216,6 +307,6 @@ else
     echo -e "❌ ${RED}VALIDATION FAILED${NC}"
     echo "$FAILED issue(s) detected"
     echo ""
-    echo "Run './scripts/validate-cluster.sh' to see details"
+    echo "Run './scripts/bootstrap/validation/99-validate-cluster.sh' to see details"
     exit 1
 fi

@@ -1,0 +1,12 @@
+# Valid claim with backend service discovery
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: WebService
+metadata:
+  name: test-backend-service
+  namespace: test
+spec:
+  image: "nginx:1.25"
+  port: 80
+  backendServiceName: "api-service"
+  backendServicePort: 8080
+  sessionAffinity: "ClientIP"

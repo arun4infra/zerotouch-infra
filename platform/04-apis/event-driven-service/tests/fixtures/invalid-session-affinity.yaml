@@ -1,0 +1,19 @@
+# Invalid EventDrivenService - Invalid Session Affinity Value
+# This test case should FAIL validation due to invalid sessionAffinity enum value
+
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: EventDrivenService
+metadata:
+  name: invalid-session-affinity
+  namespace: test
+spec:
+  image: nginx:alpine
+  size: small
+  nats:
+    url: nats://nats.nats.svc:4222
+    stream: TEST_STREAM
+    consumer: test-consumer
+  
+  httpPort: 8000
+  # Invalid: sessionAffinity must be "None" or "ClientIP"
+  sessionAffinity: "InvalidValue"

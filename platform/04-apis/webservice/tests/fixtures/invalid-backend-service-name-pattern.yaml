@@ -1,0 +1,11 @@
+# Invalid claim - backendServiceName with invalid characters
+apiVersion: platform.bizmatters.io/v1alpha1
+kind: WebService
+metadata:
+  name: test-invalid-backend-name
+  namespace: test
+spec:
+  image: "nginx:1.25"
+  port: 80
+  backendServiceName: "Invalid_Service_Name!"  # Contains invalid characters
+  backendServicePort: 8080

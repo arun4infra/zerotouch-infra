@@ -129,6 +129,34 @@ spec:
                         pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
                         example: "ghcr-pull-secret"
 
+                # HTTP endpoint configuration (optional - enables HTTP/WebSocket alongside NATS)
+                httpPort:
+                  type: integer
+                  description: "HTTP port for REST/WebSocket endpoints (optional - if specified, creates HTTP Service)"
+                  minimum: 1
+                  maximum: 65535
+                  example: 8000
+
+                healthPath:
+                  type: string
+                  description: "Health check endpoint path (only when httpPort specified)"
+                  default: "/health"
+                  pattern: '^\/.*'
+                  example: "/health"
+
+                readyPath:
+                  type: string
+                  description: "Readiness check endpoint path (only when httpPort specified)"
+                  default: "/ready"
+                  pattern: '^\/.*'
+                  example: "/ready"
+
+                sessionAffinity:
+                  type: string
+                  description: "Session affinity for HTTP service (only when httpPort specified)"
+                  enum: ["None", "ClientIP"]
+                  default: "None"
+
                 initContainer:
                   type: object
                   description: "Optional init container configuration for database migrations or pre-start tasks (uses same image as main container)"
