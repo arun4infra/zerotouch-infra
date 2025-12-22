@@ -161,8 +161,8 @@ echo -e "${BLUE}Testing EventDrivenService claim validation...${NC}"
 
 EVENTDRIVENSERVICE_DIR="$REPO_ROOT/platform/04-apis/event-driven-service"
 
-# Create temporary namespace for testing (if it doesn't exist)
-kubectl create namespace test --dry-run=client -o yaml | kubectl apply -f - &>/dev/null || true
+# Create temporary namespace for testing (must actually exist for --dry-run=server)
+kubectl create namespace test 2>/dev/null || true
 
 # Test valid minimal claim
 if kubectl apply --dry-run=server -f "$EVENTDRIVENSERVICE_DIR/tests/fixtures/valid-minimal.yaml" &>/dev/null; then
