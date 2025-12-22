@@ -77,7 +77,7 @@ Use this workflow when:
 ### Phase 2: Clean Up Target Branch
 1. **Sync Local**: Pull latest changes from target branch
 2. **Create Cleanup Branch**: Create new branch from updated target branch (usually `main`)
-3. **Verify References**: Ensure all `targetRevision` values point to target branch (usually `main`). Use scripts/bootstrap/update-target-revision.sh script to update the target revision on files that has references to `targetRevision`.
+3. **Verify References**: Ensure all `targetRevision` values point to target branch (usually `main`). Use `scripts/bootstrap/update-target-revision.sh main` script to update the target revision on files that has references to `targetRevision`.
 4. **Enable Auto-Delete**: Re-enable "Automatically delete head branches" setting
 5. **Merge Cleanup**: Merge cleanup branch to target branch
 
