@@ -9,7 +9,8 @@
 # 4. Test claims can be validated
 # 5. Database XRD integration works
 
-set -e
+# Print output immediately for CI visibility
+echo "Starting WebService API verification..."
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,15 +24,24 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+# Kubectl wrapper function with optional timeout
+kubectl_cmd() {
+    # Use timeout if available, otherwise run directly
+    if command -v timeout >/dev/null 2>&1; then
+        timeout 5 kubectl "$@"
+    else
+        kubectl "$@"
+    fi
+}
+
 # Kubectl retry function with shorter timeouts for validation
 kubectl_retry() {
     local max_attempts=3
-    local timeout=5
     local attempt=1
     local exitCode=0
 
     while [ $attempt -le $max_attempts ]; do
-        if timeout $timeout kubectl "$@"; then
+        if kubectl_cmd "$@" 2>/dev/null; then
             return 0
         fi
 

@@ -46,14 +46,19 @@ for script in "$SCRIPT_DIR"/[0-9][0-9]-*.sh; do
         echo "  - Starting validation..."
         echo ""
         
+        # Flush stdout to ensure output is visible
+        sync
+        
         # Run script and capture exit code
-        # Don't use set -e/+e as it can cause issues
-        if "$script"; then
+        # Use explicit redirection to ensure output is visible
+        if "$script" 2>&1; then
             validation_exit_code=0
         else
             validation_exit_code=$?
         fi
         
+        # Flush again after script completes
+        sync
         echo ""
         
         if [ $validation_exit_code -eq 0 ]; then
