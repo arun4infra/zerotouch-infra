@@ -60,8 +60,8 @@ if [ "$IS_PREVIEW_MODE" = true ]; then
     EXPECTED_APPS=("crossplane-operator" "external-secrets" "keda" "foundation-config" "databases")
     echo -e "${BLUE}Preview mode detected - checking core applications only${NC}"
 else
-    # Production mode: All components
-    EXPECTED_APPS=("crossplane-operator" "external-secrets" "keda" "kagent" "apis" "intelligence" "foundation-config" "databases")
+    # Production mode: All components including tenant-infrastructure
+    EXPECTED_APPS=("crossplane-operator" "external-secrets" "keda" "kagent" "apis" "intelligence" "foundation-config" "databases" "tenant-infrastructure")
 fi
 MISSING_APPS=()
 
