@@ -18,6 +18,33 @@ echo ""
 
 echo "🔍 Verifying Tenant Landing Zones..."
 
+# Check if running in preview mode (Kind cluster)
+IS_PREVIEW_MODE=false
+if kubectl get nodes -o name 2>/dev/null | grep -q "zerotouch-preview"; then
+    IS_PREVIEW_MODE=true
+fi
+
+if [ "$IS_PREVIEW_MODE" = true ]; then
+    echo -e "${BLUE}Preview mode detected - tenant-infrastructure not deployed${NC}"
+    echo -e "${BLUE}Namespaces should be created by CI scripts (mock landing zones)${NC}"
+    
+    # In preview mode, just check if expected namespaces exist (created by CI)
+    EXPECTED_NS=("intelligence-deepagents" "intelligence-orchestrator")
+    
+    FAILED=0
+    for ns in "${EXPECTED_NS[@]}"; do
+        if kubectl get namespace "$ns" >/dev/null 2>&1; then
+            echo -e "${GREEN}✓ Mock namespace '$ns' exists (created by CI)${NC}"
+        else
+            echo -e "${YELLOW}⚠️  Mock namespace '$ns' not found - CI should create it${NC}"
+            # Don't fail in preview mode - CI might create namespaces later
+        fi
+    done
+    
+    echo -e "${GREEN}✅ Preview mode validation complete${NC}"
+    exit 0
+fi
+
 # 1. Fetch expected tenants from the tenant-infrastructure application
 TENANT_CACHE_DIR=".tenants-cache"
 

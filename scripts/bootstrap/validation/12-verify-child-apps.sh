@@ -56,7 +56,7 @@ if kubectl get nodes -o name 2>/dev/null | grep -q "zerotouch-preview"; then
 fi
 
 if [ "$IS_PREVIEW_MODE" = true ]; then
-    # Preview mode: Only core components (no kagent, apis, intelligence)
+    # Preview mode: Only core components (no kagent, apis, intelligence, tenant-infrastructure)
     EXPECTED_APPS=("crossplane-operator" "external-secrets" "keda" "foundation-config" "databases")
     echo -e "${BLUE}Preview mode detected - checking core applications only${NC}"
 else
