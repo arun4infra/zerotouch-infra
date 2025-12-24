@@ -57,6 +57,11 @@ echo "==========================================================================
 
 # Step 1: Setup Kind cluster first (before building image)
 log_info "Step 1: Setting up Kind cluster..."
+
+# Clean up existing cluster first
+log_info "Cleaning up existing cluster..."
+kind delete cluster --name zerotouch-preview || true
+
 if ! command -v kind &> /dev/null; then
     echo "Installing kind..."
     curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
@@ -99,7 +104,13 @@ kubectl label nodes --all workload.bizmatters.dev/databases=true --overwrite
 log_info "Step 2: Building Docker image..."
 export SERVICE_NAME="${SERVICE_NAME}"
 export BUILD_ONLY=true
+
+# Change to service directory before building
+# Go up from zerotouch-platform to parent directory, then into service directory
+SERVICE_DIR="$(cd "${SCRIPT_DIR}/../../../../${SERVICE_NAME}" && pwd)"
+cd "${SERVICE_DIR}"
 "${SCRIPT_DIR}/scripts/build.sh" --mode=test
+cd - > /dev/null
 
 # Step 3: Load Docker image into Kind cluster (now that cluster exists)
 log_info "Step 3: Loading Docker image into Kind cluster..."
