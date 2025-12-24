@@ -76,11 +76,17 @@ load_service_config() {
         exit 1
     fi
     
-    # Auto-discover test configuration
-    if [[ -d "tests/integration" ]]; then
+    # Auto-discover test configuration (only if not already set via environment)
+    if [[ -z "$TEST_PATH" && -d "tests/integration" ]]; then
         TEST_PATH="tests/integration"
         TEST_NAME="integration-tests"
         log_info "Auto-discovered tests in: $TEST_PATH"
+    elif [[ -n "$TEST_PATH" ]]; then
+        log_info "Using test path from environment: $TEST_PATH"
+        # Set default test name if not provided
+        if [[ -z "$TEST_NAME" ]]; then
+            TEST_NAME="integration-tests"
+        fi
     fi
     
     log_success "Service config loaded: $SERVICE_NAME -> $NAMESPACE"
