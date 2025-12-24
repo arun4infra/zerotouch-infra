@@ -94,14 +94,18 @@ if [[ "$MODE" == "test" ]]; then
     
     log_success "Docker image built successfully"
     
-    log_info "Loading image into Kind cluster..."
-    if ! kind load docker-image "${SERVICE_NAME}:${IMAGE_TAG}" --name "${CLUSTER_NAME}"; then
-        log_error "Failed to load image into Kind cluster"
-        exit 1
+    # Only load into Kind cluster if BUILD_ONLY is not set
+    if [[ "${BUILD_ONLY:-false}" != "true" ]]; then
+        log_info "Loading image into Kind cluster..."
+        if ! kind load docker-image "${SERVICE_NAME}:${IMAGE_TAG}" --name "${CLUSTER_NAME}"; then
+            log_error "Failed to load image into Kind cluster"
+            exit 1
+        fi
+        log_success "Image loaded successfully into Kind cluster"
+        log_success "Build and load complete: ${SERVICE_NAME}:${IMAGE_TAG}"
+    else
+        log_success "Build complete (skipping load): ${SERVICE_NAME}:${IMAGE_TAG}"
     fi
-    
-    log_success "Image loaded successfully into Kind cluster"
-    log_success "Build and load complete: ${SERVICE_NAME}:${IMAGE_TAG}"
 
 elif [[ "$MODE" == "production" || "$MODE" == "local" ]]; then
     # ========================================================================

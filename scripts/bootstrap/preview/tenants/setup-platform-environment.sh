@@ -55,12 +55,8 @@ echo "  Service:   ${SERVICE_NAME}"
 echo "  Image Tag: ${IMAGE_TAG}"
 echo "================================================================================"
 
-# Step 1: Build test image
-log_info "Step 1: Building test image..."
-"${SCRIPT_DIR}/scripts/build-test-image.sh" --service="${SERVICE_NAME}" --image-tag="${IMAGE_TAG}"
-
-# Step 2: Setup Kind cluster (inline from workflow)
-log_info "Step 2: Setting up Kind cluster..."
+# Step 1: Setup Kind cluster first (before building image)
+log_info "Step 1: Setting up Kind cluster..."
 if ! command -v kind &> /dev/null; then
     echo "Installing kind..."
     curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
@@ -98,6 +94,16 @@ EOF
 kind create cluster --config /tmp/kind/config.yaml
 kubectl config use-context kind-zerotouch-preview
 kubectl label nodes --all workload.bizmatters.dev/databases=true --overwrite
+
+# Step 2: Build Docker image only (without loading into cluster)
+log_info "Step 2: Building Docker image..."
+export SERVICE_NAME="${SERVICE_NAME}"
+export BUILD_ONLY=true
+"${SCRIPT_DIR}/scripts/build.sh" --mode=test
+
+# Step 3: Load Docker image into Kind cluster (now that cluster exists)
+log_info "Step 3: Loading Docker image into Kind cluster..."
+"${SCRIPT_DIR}/scripts/load-image-to-kind.sh" --service="${SERVICE_NAME}" --image-tag="${IMAGE_TAG}"
 
 # Step 3: Apply platform patches
 log_info "Step 3: Applying platform patches..."

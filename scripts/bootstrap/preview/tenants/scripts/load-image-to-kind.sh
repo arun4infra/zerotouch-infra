@@ -2,18 +2,16 @@
 set -euo pipefail
 
 # ==============================================================================
-# Shared Script: Build Test Image
+# Shared Script: Load Docker Image into Kind Cluster
 # ==============================================================================
-# Purpose: Build Docker test image and load into Kind cluster
-# Usage: ./build-test-image.sh --service=<service-name> [--image-tag=<tag>]
-# Moved from: ide-orchestrator/scripts/ci/build.sh (test mode only)
+# Purpose: Load Docker image into Kind cluster
+# Usage: ./load-image-to-kind.sh --service=<service-name> [--image-tag=<tag>]
 # ==============================================================================
 
 # Default values
 SERVICE_NAME=""
 IMAGE_TAG="ci-test"
 CLUSTER_NAME="zerotouch-preview"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Color codes
 RED='\033[0;31m'
@@ -21,9 +19,9 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-log_info() { echo -e "${BLUE}[BUILD]${NC} $*"; }
-log_success() { echo -e "${GREEN}[BUILD]${NC} $*"; }
-log_error() { echo -e "${RED}[BUILD]${NC} $*"; }
+log_info() { echo -e "${BLUE}[LOAD]${NC} $*"; }
+log_success() { echo -e "${GREEN}[LOAD]${NC} $*"; }
+log_error() { echo -e "${RED}[LOAD]${NC} $*"; }
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -51,15 +49,17 @@ if [[ -z "$SERVICE_NAME" ]]; then
 fi
 
 echo "================================================================================"
-echo "Building Test Image"
+echo "Loading Docker Image into Kind Cluster"
 echo "================================================================================"
 echo "  Service:   ${SERVICE_NAME}"
 echo "  Image Tag: ${IMAGE_TAG}"
 echo "  Cluster:   ${CLUSTER_NAME}"
 echo "================================================================================"
 
-# Use the centralized build script in test mode
-export SERVICE_NAME="${SERVICE_NAME}"
-"${SCRIPT_DIR}/build.sh" --mode=test
+log_info "Loading image into Kind cluster..."
+if ! kind load docker-image "${SERVICE_NAME}:${IMAGE_TAG}" --name "${CLUSTER_NAME}"; then
+    log_error "Failed to load image into Kind cluster"
+    exit 1
+fi
 
-log_success "Build and load complete: ${SERVICE_NAME}:${IMAGE_TAG}"
+log_success "Image loaded successfully into Kind cluster: ${SERVICE_NAME}:${IMAGE_TAG}"
