@@ -22,13 +22,22 @@ log_warn() { echo -e "${YELLOW}[POST-DEPLOY]${NC} $*"; }
 
 # Load service configuration from ci/config.yaml
 load_service_config() {
-    # Look for ci/config.yaml in service directory (one level up from platform)
-    local config_file="../ci/config.yaml"
+    # Look for ci/config.yaml in current directory (service directory)
+    local config_file="ci/config.yaml"
+    
+    # If not found in current directory, try one level up (in case we're in platform dir)
+    if [[ ! -f "$config_file" ]]; then
+        config_file="../ci/config.yaml"
+    fi
     
     if [[ ! -f "$config_file" ]]; then
         log_error "ci/config.yaml not found - cannot run diagnostics"
+        log_error "Looked in: ./ci/config.yaml and ../ci/config.yaml"
+        log_error "Current directory: $(pwd)"
         exit 1
     fi
+    
+    log_info "Using config file: $config_file"
     
     if command -v yq &> /dev/null; then
         SERVICE_NAME=$(yq eval '.service.name' "$config_file")
