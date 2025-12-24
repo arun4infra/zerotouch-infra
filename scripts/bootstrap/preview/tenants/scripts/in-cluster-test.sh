@@ -51,6 +51,7 @@ load_service_config() {
         NAMESPACE=$(yq eval '.service.namespace' ci/config.yaml)
         TIMEOUT=$(yq eval '.test.timeout // 600' ci/config.yaml)
         IMAGE_TAG=$(yq eval '.build.tag // "ci-test"' ci/config.yaml)
+        PLATFORM_BRANCH=$(yq eval '.platform.branch // "main"' ci/config.yaml)
         
         # Load environment variables from config
         ENV_VARS=$(yq eval '.env // {}' ci/config.yaml -o json 2>/dev/null || echo "{}")
@@ -60,6 +61,7 @@ load_service_config() {
         NAMESPACE=$(grep -E '^\s*namespace:' ci/config.yaml | sed 's/.*namespace:\s*["\x27]*\([^"\x27]*\)["\x27]*.*/\1/' | tr -d ' ')
         TIMEOUT=$(grep -E '^\s*timeout:' ci/config.yaml | sed 's/.*timeout:\s*\([0-9]*\).*/\1/' || echo "600")
         IMAGE_TAG=$(grep -E '^\s*tag:' ci/config.yaml | sed 's/.*tag:\s*["\x27]*\([^"\x27]*\)["\x27]*.*/\1/' | tr -d ' ' || echo "ci-test")
+        PLATFORM_BRANCH=$(grep -E '^\s*branch:' ci/config.yaml | sed 's/.*branch:\s*["\x27]*\([^"\x27]*\)["\x27]*.*/\1/' | tr -d ' ' || echo "main")
         ENV_VARS="{}"
     fi
     
@@ -414,26 +416,36 @@ setup_ci_infrastructure() {
 
     # Step 2: Checkout zerotouch-platform
     log_info "Checkout zerotouch-platform"
-    PLATFORM_BRANCH="${PLATFORM_BRANCH:-main}"
-    # Create folder name with branch (replace / with -)
-    BRANCH_FOLDER_NAME=$(echo "$PLATFORM_BRANCH" | sed 's/\//-/g')
-    PLATFORM_CHECKOUT_DIR="zerotouch-platform-${BRANCH_FOLDER_NAME}"
-
-    if [[ -d "$PLATFORM_CHECKOUT_DIR" ]]; then
-        log_info "Platform directory exists ($PLATFORM_CHECKOUT_DIR), updating..."
-        cd "$PLATFORM_CHECKOUT_DIR"
-        git fetch origin
-        git checkout "$PLATFORM_BRANCH"
-        git pull origin "$PLATFORM_BRANCH"
-        cd - > /dev/null
+    
+    # Check if we're already running from a platform checkout (service script provided it)
+    CURRENT_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [[ "$CURRENT_SCRIPT_DIR" == *"zerotouch-platform"* ]]; then
+        # We're already running from a platform checkout, use it
+        PLATFORM_ROOT="$(cd "$CURRENT_SCRIPT_DIR/../../../../.." && pwd)"
+        log_success "Using existing platform checkout at: $PLATFORM_ROOT"
     else
-        log_info "Cloning zerotouch-platform repository (branch: $PLATFORM_BRANCH)..."
-        git clone -b "$PLATFORM_BRANCH" https://github.com/arun4infra/zerotouch-platform.git "$PLATFORM_CHECKOUT_DIR"
+        # We need to clone the platform (legacy mode)
+        # PLATFORM_BRANCH is now loaded from service config in load_service_config()
+        # Create folder name with branch (replace / with -)
+        BRANCH_FOLDER_NAME=$(echo "$PLATFORM_BRANCH" | sed 's/\//-/g')
+        PLATFORM_CHECKOUT_DIR="zerotouch-platform-${BRANCH_FOLDER_NAME}"
+        
+        if [[ -d "$PLATFORM_CHECKOUT_DIR" ]]; then
+            log_info "Platform directory exists ($PLATFORM_CHECKOUT_DIR), updating..."
+            cd "$PLATFORM_CHECKOUT_DIR"
+            git fetch origin
+            git checkout "$PLATFORM_BRANCH"
+            git pull origin "$PLATFORM_BRANCH"
+            cd - > /dev/null
+        else
+            log_info "Cloning zerotouch-platform repository (branch: $PLATFORM_BRANCH)..."
+            git clone -b "$PLATFORM_BRANCH" https://github.com/arun4infra/zerotouch-platform.git "$PLATFORM_CHECKOUT_DIR"
+        fi
+        
+        # Update platform root path now that we have the checkout
+        PLATFORM_ROOT="$(cd "${PLATFORM_CHECKOUT_DIR}" && pwd)"
+        log_success "Platform checked out at: $PLATFORM_ROOT (branch: $PLATFORM_BRANCH)"
     fi
-
-    # Update platform root path now that we have the checkout
-    PLATFORM_ROOT="$(cd "${PLATFORM_CHECKOUT_DIR}" && pwd)"
-    log_success "Platform checked out at: $PLATFORM_ROOT (branch: $PLATFORM_BRANCH)"
 
     # Step 3: Configure AWS credentials (skip for local - assume already configured)
     log_info "Configure AWS credentials (assuming already configured locally)"
