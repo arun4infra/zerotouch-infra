@@ -149,6 +149,24 @@ load_environment_variables() {
     fi
 }
 
+# Validate service contract compliance
+validate_service_contract() {
+    log_info "Validating service contract compliance..."
+    
+    # Basic validation - platform will handle detailed checks
+    if [[ -z "$SERVICE_NAME" ]]; then
+        log_error "service.name is required in ci/config.yaml"
+        exit 1
+    fi
+    
+    if [[ -z "$NAMESPACE" ]]; then
+        log_error "service.namespace is required in ci/config.yaml"
+        exit 1
+    fi
+    
+    log_success "Service contract validated for: $SERVICE_NAME"
+}
+
 # Legacy argument parsing (for backward compatibility during migration)
 parse_legacy_arguments() {
     if [[ $# -eq 0 ]]; then
