@@ -26,15 +26,15 @@ log_warn() { echo -e "${YELLOW}[WARNING]${NC} $*" >&2; }
 main() {
     log_info "Applying ide-orchestrator-specific platform patches..."
     
-    # Ensure zerotouch-platform exists
-    if [[ ! -d "zerotouch-platform" ]]; then
-        log_error "zerotouch-platform directory not found"
+    # Ensure we're in the zerotouch-platform directory
+    if [[ ! -d "bootstrap" ]]; then
+        log_error "bootstrap directory not found - script must run from zerotouch-platform directory"
         exit 1
     fi
     
     # Step 1: Disable ArgoCD auto-sync to prevent conflicts during patching
     log_info "Step 1: Disabling ArgoCD auto-sync for stable patching..."
-    ARGOCD_CM_PATCH="zerotouch-platform/bootstrap/argocd/install/argocd-cm-patch.yaml"
+    ARGOCD_CM_PATCH="bootstrap/argocd/install/argocd-cm-patch.yaml"
     
     if [[ -f "$ARGOCD_CM_PATCH" ]]; then
         log_info "Found ArgoCD ConfigMap patch file: $ARGOCD_CM_PATCH"
@@ -76,8 +76,8 @@ EOF
     
     # Disable kagent by setting replicas to 0
     KAGENT_FILES=(
-        "zerotouch-platform/platform/03-intelligence/compositions/kagents/librarian/qdrant-mcp-deployment.yaml"
-        "zerotouch-platform/platform/03-intelligence/compositions/kagents/librarian/docs-mcp-deployment.yaml"
+        "platform/03-intelligence/compositions/kagents/librarian/qdrant-mcp-deployment.yaml"
+        "platform/03-intelligence/compositions/kagents/librarian/docs-mcp-deployment.yaml"
     )
     
     KAGENT_DISABLED=0
@@ -106,7 +106,7 @@ EOF
     
     # Disable KEDA by setting replicas to 0
     KEDA_DIRS=(
-        "zerotouch-platform/platform/02-workloads/keda"
+        "platform/02-workloads/keda"
     )
     
     KEDA_DISABLED=0
