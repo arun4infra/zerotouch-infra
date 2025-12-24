@@ -57,9 +57,13 @@ while [[ $# -gt 0 ]]; do
             NAMESPACE="${1#*=}"
             shift
             ;;
+        --platform-branch=*)
+            PLATFORM_BRANCH="${1#*=}"
+            shift
+            ;;
         *)
             log_error "Unknown argument: $1"
-            echo "Usage: $0 --service=<name> --test-path=<path> --test-name=<name> [--timeout=<seconds>] [--image-tag=<tag>] [--namespace=<ns>]"
+            echo "Usage: $0 --service=<name> --test-path=<path> --test-name=<name> [--timeout=<seconds>] [--image-tag=<tag>] [--namespace=<ns>] [--platform-branch=<branch>]"
             exit 1
             ;;
     esac
@@ -78,7 +82,8 @@ fi
 
 # Get script directory and determine paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLATFORM_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+# Platform root will be determined after checkout
+PLATFORM_ROOT=""
 
 echo "================================================================================"
 echo "Shared In-Cluster Test Script (Mimics GitHub Workflow)"
@@ -134,8 +139,28 @@ trap cleanup EXIT
 # Step 1: Checkout repository (simulated - we're already in the repo)
 log_info "Step 1: Checkout repository (already in repository)"
 
-# Step 2: Checkout zerotouch-platform (simulated - we're already in platform)
-log_info "Step 2: Checkout zerotouch-platform (already in platform)"
+# Step 2: Checkout zerotouch-platform
+log_info "Step 2: Checkout zerotouch-platform"
+PLATFORM_BRANCH="${PLATFORM_BRANCH:-main}"
+# Create folder name with branch (replace / with -)
+BRANCH_FOLDER_NAME=$(echo "$PLATFORM_BRANCH" | sed 's/\//-/g')
+PLATFORM_CHECKOUT_DIR="zerotouch-platform-${BRANCH_FOLDER_NAME}"
+
+if [[ -d "$PLATFORM_CHECKOUT_DIR" ]]; then
+    log_info "Platform directory exists ($PLATFORM_CHECKOUT_DIR), updating..."
+    cd "$PLATFORM_CHECKOUT_DIR"
+    git fetch origin
+    git checkout "$PLATFORM_BRANCH"
+    git pull origin "$PLATFORM_BRANCH"
+    cd - > /dev/null
+else
+    log_info "Cloning zerotouch-platform repository (branch: $PLATFORM_BRANCH)..."
+    git clone -b "$PLATFORM_BRANCH" https://github.com/arun4infra/zerotouch-platform.git "$PLATFORM_CHECKOUT_DIR"
+fi
+
+# Update platform root path now that we have the checkout
+PLATFORM_ROOT="$(cd "${PLATFORM_CHECKOUT_DIR}" && pwd)"
+log_success "Platform checked out at: $PLATFORM_ROOT (branch: $PLATFORM_BRANCH)"
 
 # Step 3: Configure AWS credentials (skip for local - assume already configured)
 log_info "Step 3: Configure AWS credentials (assuming already configured locally)"
@@ -145,11 +170,12 @@ log_info "Step 4: Set up Docker Buildx (assuming Docker is available locally)"
 
 # Step 5: Setup Platform Environment
 log_info "Step 5: Setup Platform Environment"
-if [[ -f "${SCRIPT_DIR}/setup-platform-environment.sh" ]]; then
-    chmod +x "${SCRIPT_DIR}/setup-platform-environment.sh"
-    "${SCRIPT_DIR}/setup-platform-environment.sh" --service="${SERVICE_NAME}" --image-tag="${IMAGE_TAG}"
+PLATFORM_SETUP_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/setup-platform-environment.sh"
+if [[ -f "$PLATFORM_SETUP_SCRIPT" ]]; then
+    chmod +x "$PLATFORM_SETUP_SCRIPT"
+    "$PLATFORM_SETUP_SCRIPT" --service="${SERVICE_NAME}" --image-tag="${IMAGE_TAG}"
 else
-    log_error "Platform setup script not found: ${SCRIPT_DIR}/setup-platform-environment.sh"
+    log_error "Platform setup script not found: $PLATFORM_SETUP_SCRIPT"
     exit 1
 fi
 
@@ -169,86 +195,94 @@ cd - > /dev/null
 
 # Step 7: Apply preview patches
 log_info "Step 7: Apply preview patches"
-if [[ -f "${SCRIPT_DIR}/00-apply-all-patches.sh" ]]; then
-    chmod +x "${SCRIPT_DIR}/00-apply-all-patches.sh"
-    "${SCRIPT_DIR}/00-apply-all-patches.sh" --force
+PATCHES_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/00-apply-all-patches.sh"
+if [[ -f "$PATCHES_SCRIPT" ]]; then
+    chmod +x "$PATCHES_SCRIPT"
+    "$PATCHES_SCRIPT" --force
 else
-    log_error "Preview patches script not found: ${SCRIPT_DIR}/00-apply-all-patches.sh"
+    log_error "Preview patches script not found: $PATCHES_SCRIPT"
     exit 1
 fi
 
 # Step 8: Setup dependencies
 log_info "Step 8: Setup dependencies"
-if [[ -f "${SCRIPT_DIR}/setup-dependencies.sh" ]]; then
-    chmod +x "${SCRIPT_DIR}/setup-dependencies.sh"
-    "${SCRIPT_DIR}/setup-dependencies.sh"
+SETUP_DEPS_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/setup-dependencies.sh"
+if [[ -f "$SETUP_DEPS_SCRIPT" ]]; then
+    chmod +x "$SETUP_DEPS_SCRIPT"
+    "$SETUP_DEPS_SCRIPT"
 else
-    log_error "Setup dependencies script not found: ${SCRIPT_DIR}/setup-dependencies.sh"
+    log_error "Setup dependencies script not found: $SETUP_DEPS_SCRIPT"
     exit 1
 fi
 
 # Step 9: Run pre-deploy diagnostics
 log_info "Step 9: Run pre-deploy diagnostics"
-if [[ -f "${SCRIPT_DIR}/pre-deploy-diagnostics.sh" ]]; then
-    chmod +x "${SCRIPT_DIR}/pre-deploy-diagnostics.sh"
-    "${SCRIPT_DIR}/pre-deploy-diagnostics.sh"
+PRE_DEPLOY_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/pre-deploy-diagnostics.sh"
+if [[ -f "$PRE_DEPLOY_SCRIPT" ]]; then
+    chmod +x "$PRE_DEPLOY_SCRIPT"
+    "$PRE_DEPLOY_SCRIPT"
 else
-    log_error "Pre-deploy diagnostics script not found: ${SCRIPT_DIR}/pre-deploy-diagnostics.sh"
+    log_error "Pre-deploy diagnostics script not found: $PRE_DEPLOY_SCRIPT"
     exit 1
 fi
 
 # Step 10: Validate platform dependencies
 log_info "Step 10: Validate platform dependencies"
-if [[ -f "${SCRIPT_DIR}/validate-platform-dependencies.sh" ]]; then
-    chmod +x "${SCRIPT_DIR}/validate-platform-dependencies.sh"
-    "${SCRIPT_DIR}/validate-platform-dependencies.sh"
+VALIDATE_DEPS_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/validate-platform-dependencies.sh"
+if [[ -f "$VALIDATE_DEPS_SCRIPT" ]]; then
+    chmod +x "$VALIDATE_DEPS_SCRIPT"
+    "$VALIDATE_DEPS_SCRIPT"
 else
-    log_error "Validate platform dependencies script not found: ${SCRIPT_DIR}/validate-platform-dependencies.sh"
+    log_error "Validate platform dependencies script not found: $VALIDATE_DEPS_SCRIPT"
     exit 1
 fi
 
 # Step 11: Deploy service
 log_info "Step 11: Deploy service"
-if [[ -f "${SCRIPT_DIR}/deploy.sh" ]]; then
-    chmod +x "${SCRIPT_DIR}/deploy.sh"
-    "${SCRIPT_DIR}/deploy.sh"
+DEPLOY_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/deploy.sh"
+if [[ -f "$DEPLOY_SCRIPT" ]]; then
+    chmod +x "$DEPLOY_SCRIPT"
+    "$DEPLOY_SCRIPT"
 else
-    log_error "Deploy script not found: ${SCRIPT_DIR}/deploy.sh"
+    log_error "Deploy script not found: $DEPLOY_SCRIPT"
     exit 1
 fi
 
 # Step 12: Run database migrations
 log_info "Step 12: Run database migrations"
-if [[ -f "${SCRIPT_DIR}/run-migrations.sh" ]]; then
-    chmod +x "${SCRIPT_DIR}/run-migrations.sh"
-    "${SCRIPT_DIR}/run-migrations.sh" "${NAMESPACE}"
+MIGRATIONS_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/run-migrations.sh"
+if [[ -f "$MIGRATIONS_SCRIPT" ]]; then
+    chmod +x "$MIGRATIONS_SCRIPT"
+    "$MIGRATIONS_SCRIPT" "${NAMESPACE}"
 else
-    log_error "Migration script not found: ${SCRIPT_DIR}/run-migrations.sh"
+    log_error "Migration script not found: $MIGRATIONS_SCRIPT"
     exit 1
 fi
 
 # Step 13: Run post-deploy diagnostics
 log_info "Step 13: Run post-deploy diagnostics"
-if [[ -f "${SCRIPT_DIR}/post-deploy-diagnostics.sh" ]]; then
-    chmod +x "${SCRIPT_DIR}/post-deploy-diagnostics.sh"
-    "${SCRIPT_DIR}/post-deploy-diagnostics.sh" "${NAMESPACE}" "${SERVICE_NAME}"
+POST_DEPLOY_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/post-deploy-diagnostics.sh"
+if [[ -f "$POST_DEPLOY_SCRIPT" ]]; then
+    chmod +x "$POST_DEPLOY_SCRIPT"
+    "$POST_DEPLOY_SCRIPT" "${NAMESPACE}" "${SERVICE_NAME}"
 else
-    log_error "Post-deploy diagnostics script not found: ${SCRIPT_DIR}/post-deploy-diagnostics.sh"
+    log_error "Post-deploy diagnostics script not found: $POST_DEPLOY_SCRIPT"
     exit 1
 fi
 
 # Step 14: Run in-cluster tests
 log_info "Step 14: Run in-cluster tests"
-if [[ -f "${SCRIPT_DIR}/run-test-job.sh" ]]; then
-    chmod +x "${SCRIPT_DIR}/run-test-job.sh"
-    if "${SCRIPT_DIR}/run-test-job.sh" "${TEST_PATH}" "${TEST_NAME}" "${TIMEOUT}" "${NAMESPACE}" "${IMAGE_TAG}"; then
+TEST_JOB_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/run-test-job.sh"
+if [[ -f "$TEST_JOB_SCRIPT" ]]; then
+    chmod +x "$TEST_JOB_SCRIPT"
+    if "$TEST_JOB_SCRIPT" "${TEST_PATH}" "${TEST_NAME}" "${TIMEOUT}" "${NAMESPACE}" "${IMAGE_TAG}"; then
         log_success "✅ In-cluster tests completed successfully!"
     else
         log_error "❌ In-cluster tests failed!"
         exit 1
     fi
 else
-    log_error "Test job script not found: ${SCRIPT_DIR}/run-test-job.sh"
+    log_error "Test job script not found: $TEST_JOB_SCRIPT"
     exit 1
 fi
 
