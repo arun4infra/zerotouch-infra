@@ -25,8 +25,8 @@ dependencies:
   # Foundation services (external-secrets, crossplane-operator, cnpg, foundation-config) are always deployed
   # Only declare optional services that your service actually uses
   platform:
-    - nats                   # NATS messaging platform (optional)
-    - keda                   # KEDA autoscaling platform (optional)
+    - nats                   # NATS messaging platform (required for agent communication)
+    - keda                   # KEDA autoscaling platform (required for scaling agents)
   
   # External services (deployed before this service)
   external: []               # deepagents-runtime has no external service dependencies

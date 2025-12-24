@@ -22,9 +22,9 @@ deployment:
 # Three types of dependencies based on CI stages
 dependencies:
   # Platform services (checked in platform readiness)
-  # Foundation services (argocd, crossplane, cnpg-operator, external-secrets) are always deployed
+  # Foundation services (external-secrets, crossplane-operator, cnpg, foundation-config) are always deployed
   # Only declare optional services that your service actually uses
-  platform: []              # No optional platform services needed
+  platform: []              # No optional platform services needed (uses foundation only)
   
   # External services (deployed before this service)
   external:
