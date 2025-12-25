@@ -347,6 +347,20 @@ trap cleanup EXIT
     # Stage 3: Service Deployment
     log_info "Stage 3: Service Deployment - Deploy the actual service and run migrations"
     
+    # Apply service-specific patches to claims before deployment
+    log_info "Applying service-specific patches to platform claims..."
+    SERVICE_PATCHES_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/apply-service-patches.sh"
+    if [[ -f "$SERVICE_PATCHES_SCRIPT" ]]; then
+        chmod +x "$SERVICE_PATCHES_SCRIPT"
+        # Run from service root directory context
+        cd - > /dev/null  # Return to service directory
+        "$SERVICE_PATCHES_SCRIPT" --service-dir "$(pwd)"
+        cd "${PLATFORM_ROOT}" > /dev/null  # Return to platform directory
+    else
+        log_error "Service patches script not found: $SERVICE_PATCHES_SCRIPT"
+        exit 1
+    fi
+    
     # Deploy service
     DEPLOY_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/deploy.sh"
     if [[ -f "$DEPLOY_SCRIPT" ]]; then
@@ -484,9 +498,8 @@ setup_ci_infrastructure() {
     # Return to service directory (assuming we're running from service root)
     cd - > /dev/null
 
-    # Step 7: Apply preview patches (including conditional services)
-    log_info "Apply preview patches"
-    apply_service_patches
+    # Step 7: Apply platform patches (including conditional services)
+    log_info "Apply platform patches"
     
     # Apply platform patches with conditional services
     cd "${PLATFORM_ROOT}"
@@ -502,39 +515,6 @@ setup_ci_infrastructure() {
 }
 
 # Service-specific functions using filesystem contract
-apply_service_patches() {
-    if [[ -d "patches" ]]; then
-        log_info "Applying service-specific patches from patches/ directory"
-        for patch in patches/[0-9][0-9]-*.sh; do
-            if [[ -f "$patch" ]]; then
-                log_info "Applying patch: $(basename "$patch")"
-                chmod +x "$patch"
-                "$patch" --force || true
-            fi
-        done
-        log_success "Service patches applied"
-    else
-        log_info "No patches/ directory found, skipping service-specific patches"
-    fi
-}
-
-# Service-specific functions using filesystem contract and config flags
-apply_service_patches() {
-    if [[ -d "patches" ]]; then
-        log_info "Applying service-specific patches from patches/ directory"
-        for patch in patches/[0-9][0-9]-*.sh; do
-            if [[ -f "$patch" ]]; then
-                log_info "Applying patch: $(basename "$patch")"
-                chmod +x "$patch"
-                "$patch" --force || true
-            fi
-        done
-        log_success "Service patches applied"
-    else
-        log_info "No patches/ directory found, skipping service-specific patches"
-    fi
-}
-
 # Legacy function - kept for backward compatibility
 setup_service_dependencies() {
     log_warn "setup_service_dependencies is deprecated - use platform readiness and external dependencies"
