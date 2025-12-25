@@ -92,7 +92,7 @@ if [[ -d "${PROJECT_ROOT}/platform/claims/${NAMESPACE}" ]]; then
     echo "✅ Platform claims applied"
     
     # Use platform's generalized wait script for Platform Services (EventDrivenService or WebService)
-    WAIT_SCRIPT="${SCRIPT_DIR}/../../wait/wait-for-platform-service.sh"
+    WAIT_SCRIPT="${SCRIPT_DIR}/../../../wait/wait-for-platform-service.sh"
     if [[ -f "$WAIT_SCRIPT" ]]; then
         chmod +x "$WAIT_SCRIPT"
         "$WAIT_SCRIPT" "${SERVICE_NAME}" "${NAMESPACE}" "${WAIT_TIMEOUT}"
