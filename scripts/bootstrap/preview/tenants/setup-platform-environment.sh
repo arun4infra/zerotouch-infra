@@ -61,6 +61,13 @@ echo "  Image Tag:  ${IMAGE_TAG}"
 echo "  Build Mode: ${BUILD_MODE}"
 echo "================================================================================"
 
+# Ensure all platform scripts have execute permissions
+log_info "Setting execute permissions on all platform scripts..."
+find "${SCRIPT_DIR}" -name "*.sh" -type f -exec chmod +x {} \;
+find "${SCRIPT_DIR}/../patches" -name "*.sh" -type f -exec chmod +x {} \; 2>/dev/null || true
+find "${SCRIPT_DIR}/../../../.." -name "*.sh" -path "*/zerotouch-platform/*" -type f -exec chmod +x {} \; 2>/dev/null || true
+log_info "Execute permissions set on all platform scripts"
+
 # Step 1: Setup Kind cluster first (before building image)
 log_info "Step 1: Setting up Kind cluster..."
 
