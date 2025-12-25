@@ -125,7 +125,9 @@ log_info "Step 3: Loading Docker image into Kind cluster..."
 
 # Step 3: Apply platform patches
 log_info "Step 3: Applying platform patches..."
+cd "${SCRIPT_DIR}/../../../.."
 "${SCRIPT_DIR}/scripts/apply-platform-patches.sh" apply
+cd - > /dev/null
 
 log_success "Platform environment setup complete for ${SERVICE_NAME}"
 log_info "Next: Run Master Bootstrap Script as separate workflow step"
