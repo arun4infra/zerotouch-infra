@@ -34,35 +34,23 @@ main() {
     
     # Step 1: Disable ArgoCD auto-sync to prevent conflicts during patching
     log_info "Step 1: Disabling ArgoCD auto-sync for stable patching..."
-    ARGOCD_CM_PATCH="bootstrap/argocd/install/argocd-cm-patch.yaml"
     
-    if [[ -f "$ARGOCD_CM_PATCH" ]]; then
-        log_info "Found ArgoCD ConfigMap patch file: $ARGOCD_CM_PATCH"
+    # Call the ArgoCD auto-sync disable patch script
+    PATCHES_DIR="$(dirname "$0")/../../patches"
+    ARGOCD_PATCH_SCRIPT="$PATCHES_DIR/01-disable-argocd-autosync.sh"
+    
+    if [[ -f "$ARGOCD_PATCH_SCRIPT" ]]; then
+        log_info "Running ArgoCD auto-sync disable patch: $ARGOCD_PATCH_SCRIPT"
+        bash "$ARGOCD_PATCH_SCRIPT"
         
-        # Check if already patched by looking at the actual ConfigMap in the cluster
-        if kubectl get configmap argocd-cm -n argocd -o yaml | grep -q "application.instanceLabelKey" 2>/dev/null; then
-            log_warn "ArgoCD auto-sync already disabled in cluster, skipping..."
+        if [[ $? -eq 0 ]]; then
+            log_success "✓ ArgoCD auto-sync disable patch completed successfully"
         else
-            log_info "Applying ArgoCD auto-sync disable configuration to cluster..."
-            
-            # Apply the patch to the cluster
-            if kubectl apply -f "$ARGOCD_CM_PATCH"; then
-                log_success "✓ ArgoCD auto-sync configuration applied to cluster"
-                
-                # Verify the patch was applied
-                if kubectl get configmap argocd-cm -n argocd -o yaml | grep -q "application.instanceLabelKey"; then
-                    log_success "✓ ArgoCD auto-sync disable verified in cluster"
-                else
-                    log_error "✗ ArgoCD auto-sync disable verification failed"
-                    exit 1
-                fi
-            else
-                log_error "✗ Failed to apply ArgoCD ConfigMap patch"
-                exit 1
-            fi
+            log_error "✗ ArgoCD auto-sync disable patch failed"
+            exit 1
         fi
     else
-        log_error "ArgoCD ConfigMap patch file not found: $ARGOCD_CM_PATCH"
+        log_error "ArgoCD auto-sync disable patch script not found: $ARGOCD_PATCH_SCRIPT"
         exit 1
     fi
     
