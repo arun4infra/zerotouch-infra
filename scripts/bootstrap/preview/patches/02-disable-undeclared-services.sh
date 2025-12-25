@@ -158,6 +158,35 @@ disable_service() {
             
             log_info "Debug: Applied sed command" >&2
             log_success "Disabled $service by commenting out $resource_name in kustomization.yaml" >&2
+            
+            # Delete the ArgoCD application if it exists
+            if kubectl get application "$service" -n argocd &>/dev/null; then
+                log_info "Deleting existing ArgoCD application: $service" >&2
+                kubectl delete application "$service" -n argocd
+                log_success "✓ Deleted ArgoCD application: $service" >&2
+            else
+                log_info "ArgoCD application $service does not exist, skipping deletion" >&2
+            fi
+            
+            # Delete the namespace if it exists and is not a system namespace
+            local system_namespaces=("kube-system" "kube-public" "kube-node-lease" "argocd" "crossplane-system" "external-secrets" "cnpg-system" "local-path-storage")
+            local is_system_namespace=false
+            
+            for sys_ns in "${system_namespaces[@]}"; do
+                if [[ "$service" == "$sys_ns" ]]; then
+                    is_system_namespace=true
+                    break
+                fi
+            done
+            
+            if [[ "$is_system_namespace" == false ]] && kubectl get namespace "$service" &>/dev/null; then
+                log_info "Deleting existing namespace: $service" >&2
+                kubectl delete namespace "$service" --timeout=60s
+                log_success "✓ Deleted namespace: $service" >&2
+            else
+                log_info "Namespace $service does not exist or is a system namespace, skipping deletion" >&2
+            fi
+            
         else
             log_error "Kustomization file not found: $kustomization_file" >&2
         fi

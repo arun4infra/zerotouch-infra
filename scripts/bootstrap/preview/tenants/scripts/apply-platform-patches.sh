@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # ==============================================================================
-# Apply Platform Patches for Preview Environment
+# Apply Platform Patches for IDE Orchestrator
 # ==============================================================================
-# Applies platform patches for preview/CI environments BEFORE bootstrap
+# Applies ide-orchestrator-specific patches to the platform BEFORE bootstrap
 # This script:
 # 1. Disables ArgoCD auto-sync to prevent conflicts during patching
 # 2. Applies resource optimization patches
@@ -24,18 +24,11 @@ log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 log_warn() { echo -e "${YELLOW}[WARNING]${NC} $*" >&2; }
 
 main() {
-    log_info "Applying platform patches for preview environment..."
-    
-    # Change to the zerotouch-platform root directory
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    PLATFORM_ROOT="$(cd "$SCRIPT_DIR/../../../../.." && pwd)"
-    cd "$PLATFORM_ROOT"
+    log_info "Applying ide-orchestrator-specific platform patches..."
     
     # Ensure we're in the zerotouch-platform directory
     if [[ ! -d "bootstrap" ]]; then
-        log_error "bootstrap directory not found - could not find zerotouch-platform directory"
-        log_error "Current directory: $(pwd)"
-        log_error "Expected to find bootstrap/ directory here"
+        log_error "bootstrap directory not found - script must run from zerotouch-platform directory"
         exit 1
     fi
     
@@ -46,28 +39,27 @@ main() {
     if [[ -f "$ARGOCD_CM_PATCH" ]]; then
         log_info "Found ArgoCD ConfigMap patch file: $ARGOCD_CM_PATCH"
         
-        # Check if already patched
-        if grep -q "application.instanceLabelKey" "$ARGOCD_CM_PATCH" 2>/dev/null; then
-            log_warn "ArgoCD auto-sync already disabled, skipping..."
+        # Check if already patched by looking at the actual ConfigMap in the cluster
+        if kubectl get configmap argocd-cm -n argocd -o yaml | grep -q "application.instanceLabelKey" 2>/dev/null; then
+            log_warn "ArgoCD auto-sync already disabled in cluster, skipping..."
         else
-            log_info "Adding auto-sync disable configuration..."
-            # Backup original file
-            cp "$ARGOCD_CM_PATCH" "$ARGOCD_CM_PATCH.backup"
+            log_info "Applying ArgoCD auto-sync disable configuration to cluster..."
             
-            # Add auto-sync disable configuration
-            cat >> "$ARGOCD_CM_PATCH" << 'EOF'
-  # Disable auto-sync for preview mode to prevent conflicts during patching
-  application.instanceLabelKey: argocd.argoproj.io/instance
-  server.disable.auth: "false"
-  # Global policy to disable auto-sync (can be overridden per application)
-  policy.default: |
-    p, role:readonly, applications, get, */*, allow
-    p, role:readonly, certificates, get, *, allow
-    p, role:readonly, clusters, get, *, allow
-    p, role:readonly, repositories, get, *, allow
-    g, argocd:readonly, role:readonly
-EOF
-            log_success "✓ ArgoCD auto-sync configuration added"
+            # Apply the patch to the cluster
+            if kubectl apply -f "$ARGOCD_CM_PATCH"; then
+                log_success "✓ ArgoCD auto-sync configuration applied to cluster"
+                
+                # Verify the patch was applied
+                if kubectl get configmap argocd-cm -n argocd -o yaml | grep -q "application.instanceLabelKey"; then
+                    log_success "✓ ArgoCD auto-sync disable verified in cluster"
+                else
+                    log_error "✗ ArgoCD auto-sync disable verification failed"
+                    exit 1
+                fi
+            else
+                log_error "✗ Failed to apply ArgoCD ConfigMap patch"
+                exit 1
+            fi
         fi
     else
         log_error "ArgoCD ConfigMap patch file not found: $ARGOCD_CM_PATCH"
