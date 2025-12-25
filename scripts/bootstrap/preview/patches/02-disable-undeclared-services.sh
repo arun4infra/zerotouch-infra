@@ -162,14 +162,14 @@ disable_service() {
             # Delete the ArgoCD application if it exists
             if kubectl get application "$service" -n argocd &>/dev/null; then
                 log_info "Deleting existing ArgoCD application: $service" >&2
-                kubectl delete application "$service" -n argocd
+                kubectl delete application "$service" -n argocd --timeout=60s
                 log_success "✓ Deleted ArgoCD application: $service" >&2
             else
                 log_info "ArgoCD application $service does not exist, skipping deletion" >&2
             fi
             
             # Delete the namespace if it exists and is not a system namespace
-            local system_namespaces=("kube-system" "kube-public" "kube-node-lease" "argocd" "crossplane-system" "external-secrets" "cnpg-system" "local-path-storage")
+            local system_namespaces=("kube-system" "kube-public" "kube-node-lease" "argocd" "crossplane-system" "external-secrets-system" "cnpg-system" "local-path-storage" "default")
             local is_system_namespace=false
             
             for sys_ns in "${system_namespaces[@]}"; do
@@ -180,11 +180,47 @@ disable_service() {
             done
             
             if [[ "$is_system_namespace" == false ]] && kubectl get namespace "$service" &>/dev/null; then
-                log_info "Deleting existing namespace: $service" >&2
-                kubectl delete namespace "$service" --timeout=60s
-                log_success "✓ Deleted namespace: $service" >&2
+                log_info "Deleting existing namespace: $service (timeout: 120s)" >&2
+                
+                # First try graceful deletion
+                kubectl delete namespace "$service" --timeout=120s &
+                local delete_pid=$!
+                
+                # Wait for deletion or timeout
+                local timeout=120
+                local elapsed=0
+                while kill -0 $delete_pid 2>/dev/null && [[ $elapsed -lt $timeout ]]; do
+                    sleep 5
+                    elapsed=$((elapsed + 5))
+                    if [[ $((elapsed % 30)) -eq 0 ]]; then
+                        log_info "Still waiting for namespace $service deletion... (${elapsed}s elapsed)" >&2
+                    fi
+                done
+                
+                # Check if deletion completed
+                if kubectl get namespace "$service" &>/dev/null; then
+                    log_warn "Namespace $service still exists after graceful deletion attempt" >&2
+                    log_info "Attempting to force delete namespace $service" >&2
+                    
+                    # Force delete by removing finalizers
+                    kubectl patch namespace "$service" -p '{"metadata":{"finalizers":[]}}' --type=merge || true
+                    kubectl delete namespace "$service" --force --grace-period=0 || true
+                    
+                    # Final check
+                    if kubectl get namespace "$service" &>/dev/null; then
+                        log_error "Failed to delete namespace $service - manual cleanup may be required" >&2
+                    else
+                        log_success "✓ Force deleted namespace: $service" >&2
+                    fi
+                else
+                    log_success "✓ Deleted namespace: $service" >&2
+                fi
             else
-                log_info "Namespace $service does not exist or is a system namespace, skipping deletion" >&2
+                if [[ "$is_system_namespace" == true ]]; then
+                    log_info "Namespace $service is a system namespace, skipping deletion" >&2
+                else
+                    log_info "Namespace $service does not exist, skipping deletion" >&2
+                fi
             fi
             
         else
