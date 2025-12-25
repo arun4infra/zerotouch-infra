@@ -90,6 +90,16 @@ if [[ -d "${PROJECT_ROOT}/platform/claims/${NAMESPACE}" ]]; then
     # Apply platform claims for the namespace
     kubectl apply -f "${PROJECT_ROOT}/platform/claims/${NAMESPACE}/" -n "${NAMESPACE}"
     echo "✅ Platform claims applied"
+    
+    # Use platform's generalized wait script for Platform Services (EventDrivenService or WebService)
+    WAIT_SCRIPT="${SCRIPT_DIR}/../../wait/wait-for-platform-service.sh"
+    if [[ -f "$WAIT_SCRIPT" ]]; then
+        chmod +x "$WAIT_SCRIPT"
+        "$WAIT_SCRIPT" "${SERVICE_NAME}" "${NAMESPACE}" "${WAIT_TIMEOUT}"
+    else
+        echo "❌ Platform service wait script not found: $WAIT_SCRIPT"
+        exit 1
+    fi
 elif [[ -d "k8s/${ENVIRONMENT}" ]]; then
     # Environment-specific manifests (fallback)
     kubectl apply -f "k8s/${ENVIRONMENT}/" -n "${NAMESPACE}"
