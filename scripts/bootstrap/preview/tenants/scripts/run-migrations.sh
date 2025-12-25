@@ -23,6 +23,20 @@ log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 main() {
     log_info "Running database migrations..."
     
+    # Read service name from config
+    if [[ ! -f "ci/config.yaml" ]]; then
+        log_error "Config file not found: ci/config.yaml"
+        return 1
+    fi
+    
+    SERVICE_NAME=$(yq eval '.service.name' ci/config.yaml)
+    if [[ -z "$SERVICE_NAME" || "$SERVICE_NAME" == "null" ]]; then
+        log_error "Service name not found in config"
+        return 1
+    fi
+    
+    log_info "Using service: $SERVICE_NAME"
+    
     # Create ConfigMap with migration files
     kubectl create configmap migration-files -n $NAMESPACE \
         --from-file=migrations/ \
@@ -46,27 +60,27 @@ spec:
         - name: POSTGRES_HOST
           valueFrom:
             secretKeyRef:
-              name: ide-orchestrator-db-conn
+              name: ${SERVICE_NAME}-db-conn
               key: POSTGRES_HOST
         - name: POSTGRES_PORT
           valueFrom:
             secretKeyRef:
-              name: ide-orchestrator-db-conn
+              name: ${SERVICE_NAME}-db-conn
               key: POSTGRES_PORT
         - name: POSTGRES_DB
           valueFrom:
             secretKeyRef:
-              name: ide-orchestrator-db-conn
+              name: ${SERVICE_NAME}-db-conn
               key: POSTGRES_DB
         - name: POSTGRES_USER
           valueFrom:
             secretKeyRef:
-              name: ide-orchestrator-db-conn
+              name: ${SERVICE_NAME}-db-conn
               key: POSTGRES_USER
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: ide-orchestrator-db-conn
+              name: ${SERVICE_NAME}-db-conn
               key: POSTGRES_PASSWORD
         command: ["/bin/bash"]
         args:
