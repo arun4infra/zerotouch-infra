@@ -352,10 +352,9 @@ trap cleanup EXIT
     SERVICE_PATCHES_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/apply-service-patches.sh"
     if [[ -f "$SERVICE_PATCHES_SCRIPT" ]]; then
         chmod +x "$SERVICE_PATCHES_SCRIPT"
-        # Run from service root directory context
-        cd - > /dev/null  # Return to service directory
-        "$SERVICE_PATCHES_SCRIPT" --service-dir "$(pwd)"
-        cd "${PLATFORM_ROOT}" > /dev/null  # Return to platform directory
+        # Get the service root directory (where ci/config.yaml is located)
+        SERVICE_ROOT_DIR="$(cd "${PLATFORM_ROOT}/.." && pwd)"
+        "$SERVICE_PATCHES_SCRIPT" --service-dir "$SERVICE_ROOT_DIR"
     else
         log_error "Service patches script not found: $SERVICE_PATCHES_SCRIPT"
         exit 1
