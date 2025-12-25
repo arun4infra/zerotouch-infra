@@ -16,10 +16,12 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../../.." && pwd)"  # Go back to serv
 
 # Load service configuration from ci/config.yaml
 load_service_config() {
-    local config_file="../ci/config.yaml"
+    local config_file="ci/config.yaml"
     
     if [[ ! -f "$config_file" ]]; then
         echo "❌ Service config not found: $config_file"
+        echo "🔍 Debug: Current directory: $(pwd)"
+        echo "🔍 Debug: Looking for config at: $config_file"
         exit 1
     fi
     
