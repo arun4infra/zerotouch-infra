@@ -20,13 +20,14 @@ spec:
         image: "{{IMAGE}}"
         workingDir: /app
         env:
-        # Database credentials from K8s secrets (dynamic service name)
+        # BEGIN_DYNAMIC_ENV
         - name: TEST_ENV
           value: "integration"
         - name: SERVICE_NAME
           value: "{{SERVICE_NAME}}"
         - name: NAMESPACE
           value: "{{NAMESPACE}}"
+        # END_DYNAMIC_ENV
         command: 
         - "/bin/sh"
         - "-c"

@@ -62,9 +62,15 @@ main() {
     # Create temporary template with dynamic environment variables
     cp "${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/templates/test-job-template.yaml" /tmp/base-template.yaml
     
-    # Replace the placeholder environment section with dynamic variables
-    sed -i.bak "/# Database credentials from K8s secrets (dynamic service name)/,/value: \"{{NAMESPACE}}\"/c\\
-$DYNAMIC_ENV_VARS" /tmp/base-template.yaml
+    # Write dynamic environment variables to temporary file
+    echo "$DYNAMIC_ENV_VARS" > /tmp/dynamic-env-vars.yaml
+    
+    # Replace the section between markers with dynamic variables using sed
+    sed -e '/# BEGIN_DYNAMIC_ENV/,/# END_DYNAMIC_ENV/{
+        /# BEGIN_DYNAMIC_ENV/r /tmp/dynamic-env-vars.yaml
+        /# BEGIN_DYNAMIC_ENV/,/# END_DYNAMIC_ENV/d
+    }' /tmp/base-template.yaml > /tmp/new-template.yaml
+    mv /tmp/new-template.yaml /tmp/base-template.yaml
     
     # Substitute variables in template
     sed -e "s/{{JOB_NAME}}/$JOB_NAME/g" \
