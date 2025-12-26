@@ -421,52 +421,13 @@ setup_ci_infrastructure() {
     # Step 1: Checkout repository (simulated - we're already in the repo)
     log_info "Checkout repository (already in repository)"
 
-    # Step 2: Checkout zerotouch-platform
-    log_info "Checkout zerotouch-platform"
+    # Step 2: Platform checkout handled by service entry point
+    log_info "Platform checkout handled by service entry point"
     
-    # Always use fresh checkout for CI reliability - never trust existing checkouts
+    # Set platform root path
     CURRENT_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    if [[ "$CURRENT_SCRIPT_DIR" == *"zerotouch-platform"* ]]; then
-        # We're running from an existing checkout - this is not ideal for CI
-        # Get the service root directory and ensure fresh checkout there
-        SERVICE_ROOT="$(cd "$CURRENT_SCRIPT_DIR/../../../../../.." && pwd)"
-        PLATFORM_CHECKOUT_DIR="$SERVICE_ROOT/zerotouch-platform"
-        
-        log_info "Running from existing platform checkout, ensuring fresh checkout..."
-        
-        # Remove existing checkout and clone fresh
-        if [[ -d "$PLATFORM_CHECKOUT_DIR" ]]; then
-            log_info "Removing existing platform checkout for fresh clone..."
-            rm -rf "$PLATFORM_CHECKOUT_DIR"
-        fi
-        
-        log_info "Cloning fresh zerotouch-platform repository (branch: $PLATFORM_BRANCH)..."
-        cd "$SERVICE_ROOT"
-        git clone -b "$PLATFORM_BRANCH" \
-            https://github.com/arun4infra/zerotouch-platform.git \
-            "zerotouch-platform"
-        
-        PLATFORM_ROOT="$PLATFORM_CHECKOUT_DIR"
-        log_success "Fresh platform checkout at: $PLATFORM_ROOT (branch: $PLATFORM_BRANCH)"
-    else
-        # We're running from service directory - standard fresh checkout
-        PLATFORM_CHECKOUT_DIR="zerotouch-platform"
-        
-        # Always remove and clone fresh for CI reliability
-        if [[ -d "$PLATFORM_CHECKOUT_DIR" ]]; then
-            log_info "Removing existing platform checkout for fresh clone..."
-            rm -rf "$PLATFORM_CHECKOUT_DIR"
-        fi
-        
-        log_info "Cloning fresh zerotouch-platform repository (branch: $PLATFORM_BRANCH)..."
-        git clone -b "$PLATFORM_BRANCH" \
-            https://github.com/arun4infra/zerotouch-platform.git \
-            "$PLATFORM_CHECKOUT_DIR"
-        
-        # Update platform root path now that we have the checkout
-        PLATFORM_ROOT="$(cd "${PLATFORM_CHECKOUT_DIR}" && pwd)"
-        log_success "Fresh platform checkout at: $PLATFORM_ROOT (branch: $PLATFORM_BRANCH)"
-    fi
+    PLATFORM_ROOT="$(cd "$CURRENT_SCRIPT_DIR/../../../../.." && pwd)"
+    log_success "Using platform checkout at: $PLATFORM_ROOT"
 
     # Step 3: Configure AWS credentials (skip for local - assume already configured)
     log_info "Configure AWS credentials (assuming already configured locally)"
