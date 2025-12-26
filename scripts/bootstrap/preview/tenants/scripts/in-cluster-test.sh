@@ -333,7 +333,20 @@ trap cleanup EXIT
     # Stage 3: Service Deployment
     log_info "Stage 3: Service Deployment - Build, patch, and deploy the service"
     
-    # Step 3a: Build service image (Platform auto-detects mode)
+    # Step 3a: Docker Registry Authentication (if in CI mode)
+    if [[ "${GITHUB_ACTIONS:-}" == "true" && -n "${BOT_GITHUB_TOKEN:-}" && -n "${BOT_GITHUB_USERNAME:-}" ]]; then
+        log_info "Authenticating with GitHub Container Registry..."
+        if echo "$BOT_GITHUB_TOKEN" | docker login ghcr.io -u "$BOT_GITHUB_USERNAME" --password-stdin; then
+            log_success "Successfully authenticated with GHCR"
+        else
+            log_error "Failed to authenticate with GitHub Container Registry"
+            exit 1
+        fi
+    else
+        log_info "Skipping Docker registry authentication (not in CI or credentials not available)"
+    fi
+    
+    # Step 3b: Build service image (Platform auto-detects mode)
     log_info "Building service image..."
     BUILD_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/build-service.sh"
     if [[ -f "$BUILD_SCRIPT" ]]; then
@@ -357,7 +370,7 @@ trap cleanup EXIT
         exit 1
     fi
 
-    # Step 3b: Patch service deployment manifests
+    # Step 3c: Patch service deployment manifests
     log_info "Patching service deployment manifests..."
     PATCH_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/patch-service-images.sh"
     if [[ -f "$PATCH_SCRIPT" ]]; then
