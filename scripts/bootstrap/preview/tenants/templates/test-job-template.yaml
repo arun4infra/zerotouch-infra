@@ -4,14 +4,14 @@ metadata:
   name: "{{JOB_NAME}}"
   namespace: "{{NAMESPACE}}"
   labels:
-    app: ide-orchestrator-tests
+    app: "{{SERVICE_NAME}}-tests"
     test-type: integration
     test-suite: "{{TEST_NAME}}"
 spec:
   template:
     metadata:
       labels:
-        app: ide-orchestrator-tests
+        app: "{{SERVICE_NAME}}-tests"
         test-type: integration
         test-suite: "{{TEST_NAME}}"
     spec:
@@ -20,41 +20,39 @@ spec:
         image: "{{IMAGE}}"
         workingDir: /app
         env:
-        # Database credentials from K8s secrets
+        # Database credentials from K8s secrets (dynamic service name)
         - name: POSTGRES_USER
           valueFrom:
             secretKeyRef:
-              name: ide-orchestrator-db-conn
+              name: "{{SERVICE_NAME}}-db-conn"
               key: POSTGRES_USER
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: ide-orchestrator-db-conn
+              name: "{{SERVICE_NAME}}-db-conn"
               key: POSTGRES_PASSWORD
         - name: POSTGRES_DB
           valueFrom:
             secretKeyRef:
-              name: ide-orchestrator-db-conn
+              name: "{{SERVICE_NAME}}-db-conn"
               key: POSTGRES_DB
         - name: POSTGRES_HOST
           valueFrom:
             secretKeyRef:
-              name: ide-orchestrator-db-conn
+              name: "{{SERVICE_NAME}}-db-conn"
               key: POSTGRES_HOST
         - name: POSTGRES_PORT
           valueFrom:
             secretKeyRef:
-              name: ide-orchestrator-db-conn
+              name: "{{SERVICE_NAME}}-db-conn"
               key: POSTGRES_PORT
-        # Service dependencies
-        - name: SPEC_ENGINE_URL
-          value: "http://deepagents-runtime.intelligence-deepagents.svc:8080"
-        # JWT configuration
-        - name: JWT_SECRET
-          value: "test-secret-key-for-integration-tests"
-        # Test configuration
-        - name: GO_ENV
-          value: "test"
+        # Test configuration (generic)
+        - name: TEST_ENV
+          value: "integration"
+        - name: SERVICE_NAME
+          value: "{{SERVICE_NAME}}"
+        - name: NAMESPACE
+          value: "{{NAMESPACE}}"
         command: 
         - "/bin/sh"
         - "-c"
@@ -65,32 +63,17 @@ spec:
           echo "=============================================="
           echo "🚀 Starting in-cluster integration tests"
           echo "=============================================="
+          echo "Service: {{SERVICE_NAME}}"
           echo "Test Path: {{TEST_PATH}}"
           echo "Test Name: {{TEST_NAME}}"
+          echo "Namespace: {{NAMESPACE}}"
           echo "Timestamp: $(date)"
           echo ""
           
           echo "=== ENVIRONMENT CHECK ==="
-          echo "Go version: $(go version)"
           echo "Working directory: $(pwd)"
           echo "Available disk space:"
           df -h /app || echo "Could not check disk space"
-          echo ""
-          
-          echo "=== DEPENDENCY CHECK ==="
-          echo "Checking database connectivity..."
-          while ! nc -z "$POSTGRES_HOST" "$POSTGRES_PORT"; do
-            echo "Waiting for PostgreSQL to be ready..."
-            sleep 2
-          done
-          echo "✅ PostgreSQL is ready"
-          
-          echo "Checking DeepAgents Runtime connectivity..."
-          while ! nc -z deepagents-runtime.intelligence-deepagents.svc 8080; do
-            echo "Waiting for DeepAgents Runtime to be ready..."
-            sleep 2
-          done
-          echo "✅ DeepAgents Runtime is ready"
           echo ""
           
           echo "=== TEST PATH VALIDATION ==="
@@ -98,14 +81,14 @@ spec:
             echo "✅ Test path exists: {{TEST_PATH}}"
             if [ -d "{{TEST_PATH}}" ]; then
               echo "Test files in directory:"
-              find "{{TEST_PATH}}" -name "*_test.go" | head -10
+              find "{{TEST_PATH}}" -name "*test*" | head -10
             fi
           else
             echo "❌ Test path does not exist: {{TEST_PATH}}"
             echo "Available files/directories:"
             ls -la . | head -10
             echo "Looking for test files:"
-            find . -name "*_test.go" | head -10
+            find . -name "*test*" | head -10
             exit 1
           fi
           echo ""
@@ -122,83 +105,72 @@ spec:
           echo ""
           
           echo "=============================================="
-          echo "🧪 Running Go tests..."
+          echo "🧪 Running integration tests..."
           echo "=============================================="
           
-          # Run pre-compiled tests to avoid memory issues during compilation
-          echo "Running pre-compiled integration tests..."
-          
-          # Check if we're running a specific test file or all tests
-          if [[ "{{TEST_PATH}}" == *".go" ]]; then
-            echo "Running specific test file: {{TEST_PATH}}"
-            # For single test files, we need to run go test directly since the pre-compiled binary includes all tests
-            if go test -v -timeout=10m "{{TEST_PATH}}" 2>&1 | tee artifacts/test-output.log; then
-              GO_TEST_EXIT_CODE=0
-              echo "✅ Go tests passed"
+          # Generic test execution - services provide their own test runner
+          if [ -f "./scripts/ci/run.sh" ]; then
+            echo "Using service CI runner: ./scripts/ci/run.sh"
+            if ./scripts/ci/run.sh test 2>&1 | tee artifacts/test-output.log; then
+              TEST_EXIT_CODE=0
+              echo "✅ Tests passed"
             else
-              GO_TEST_EXIT_CODE=$?
-              echo "❌ Go tests failed with exit code: $GO_TEST_EXIT_CODE"
+              TEST_EXIT_CODE=$?
+              echo "❌ Tests failed with exit code: $TEST_EXIT_CODE"
+            fi
+          elif [ -f "./scripts/ci/run-tests.sh" ]; then
+            echo "Using service-specific test runner: ./scripts/ci/run-tests.sh"
+            if ./scripts/ci/run-tests.sh "{{TEST_PATH}}" 2>&1 | tee artifacts/test-output.log; then
+              TEST_EXIT_CODE=0
+              echo "✅ Tests passed"
+            else
+              TEST_EXIT_CODE=$?
+              echo "❌ Tests failed with exit code: $TEST_EXIT_CODE"
+            fi
+          elif [ -f "./run.sh" ]; then
+            echo "Using service run script for tests: ./run.sh"
+            if ./run.sh test 2>&1 | tee artifacts/test-output.log; then
+              TEST_EXIT_CODE=0
+              echo "✅ Tests passed"
+            else
+              TEST_EXIT_CODE=$?
+              echo "❌ Tests failed with exit code: $TEST_EXIT_CODE"
             fi
           else
-            echo "Running all integration tests from directory: {{TEST_PATH}}"
-            if ./integration-tests -test.v -test.timeout=10m 2>&1 | tee artifacts/test-output.log; then
-              GO_TEST_EXIT_CODE=0
-              echo "✅ Go tests passed"
-            else
-              GO_TEST_EXIT_CODE=$?
-              echo "❌ Go tests failed with exit code: $GO_TEST_EXIT_CODE"
-            fi
+            echo "❌ No test runner found. Expected: ./scripts/ci/run.sh, ./scripts/ci/run-tests.sh, or ./run.sh"
+            echo "Available scripts:"
+            find . -name "*.sh" -type f | head -10
+            exit 1
           fi
-          
-          # Also generate JSON output for parsing (if test binary supports it)
-          echo ""
-          echo "Generating JSON test results..."
-          ./integration-tests -test.v -test.timeout=10m -test.json > artifacts/test-results.json 2>/dev/null || echo "JSON output not supported by test binary"
           
           echo ""
           echo "=============================================="
           echo "📊 Test Execution Complete"
           echo "=============================================="
-          echo "Go test exit code: $GO_TEST_EXIT_CODE"
+          echo "Test exit code: $TEST_EXIT_CODE"
           echo ""
           
           echo "=== ARTIFACTS GENERATED ==="
           if [ -d "artifacts" ]; then
             echo "Artifacts directory contents:"
             ls -la artifacts/ || echo "No artifacts generated"
-            
-            if [ -f "artifacts/test-results.json" ]; then
-              echo ""
-              echo "✅ Test results JSON generated"
-              echo "File size: $(stat -c%s artifacts/test-results.json 2>/dev/null || echo 'unknown') bytes"
-            else
-              echo "❌ No test-results.json generated"
-            fi
-            
-            if [ -f "artifacts/coverage.out" ]; then
-              echo "✅ Coverage report generated"
-              echo "Coverage summary:"
-              go tool cover -func=artifacts/coverage.out | tail -1 || echo "Could not generate coverage summary"
-            else
-              echo "❌ No coverage.out generated"
-            fi
           else
             echo "❌ No artifacts directory found"
           fi
           echo ""
           
-          # Exit with go test's exit code
-          if [ $GO_TEST_EXIT_CODE -eq 0 ]; then
+          # Exit with test's exit code
+          if [ $TEST_EXIT_CODE -eq 0 ]; then
             echo "✅ All tests completed successfully!"
           else
-            echo "❌ Tests failed with exit code: $GO_TEST_EXIT_CODE"
+            echo "❌ Tests failed with exit code: $TEST_EXIT_CODE"
           fi
           
           echo "=============================================="
           echo "🏁 Test execution finished"
           echo "=============================================="
           
-          exit $GO_TEST_EXIT_CODE
+          exit $TEST_EXIT_CODE
         resources:
           requests:
             memory: "512Mi"

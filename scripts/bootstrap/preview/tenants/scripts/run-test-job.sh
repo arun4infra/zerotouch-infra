@@ -14,6 +14,9 @@ TIMEOUT="${3:-600}"
 NAMESPACE="${4:-intelligence-deepagents}"
 IMAGE_TAG="${5:-ci-test}"
 
+# Platform root directory (when running from service directory)
+PLATFORM_ROOT="./zerotouch-platform"
+
 # Color codes
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -29,16 +32,31 @@ log_warn() { echo -e "${YELLOW}[WARNING]${NC} $*" >&2; }
 main() {
     log_info "Running in-cluster tests..."
     
+    # Read service name from config
+    if [[ ! -f "ci/config.yaml" ]]; then
+        log_error "Config file not found: ci/config.yaml"
+        return 1
+    fi
+    
+    SERVICE_NAME=$(yq eval '.service.name' ci/config.yaml)
+    if [[ -z "$SERVICE_NAME" || "$SERVICE_NAME" == "null" ]]; then
+        log_error "Service name not found in config"
+        return 1
+    fi
+    
+    log_info "Using service: $SERVICE_NAME"
+    
     # Create and run test job using template
     export JOB_NAME="${TEST_NAME}-$(date +%s)"
     
     # Substitute variables in template
     sed -e "s/{{JOB_NAME}}/$JOB_NAME/g" \
         -e "s/{{NAMESPACE}}/$NAMESPACE/g" \
-        -e "s/{{IMAGE}}/ide-orchestrator:$IMAGE_TAG/g" \
+        -e "s/{{IMAGE}}/$SERVICE_NAME:$IMAGE_TAG/g" \
         -e "s|{{TEST_PATH}}|$TEST_PATH|g" \
         -e "s/{{TEST_NAME}}/$TEST_NAME/g" \
-        scripts/ci/test-job-template.yaml > /tmp/test-job.yaml
+        -e "s/{{SERVICE_NAME}}/$SERVICE_NAME/g" \
+        "${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/templates/test-job-template.yaml" > /tmp/test-job.yaml
     
     # Apply job and wait for completion
     kubectl apply -f /tmp/test-job.yaml
