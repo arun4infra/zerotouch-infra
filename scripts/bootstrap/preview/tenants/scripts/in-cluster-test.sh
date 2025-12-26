@@ -15,6 +15,9 @@ set -euo pipefail
 # - platform/claims/<namespace>/ (required)
 # ==============================================================================
 
+# Configuration
+CLEANUP_CLUSTER=${CLEANUP_CLUSTER:-false}  # Default: keep cluster for debugging
+
 # Default values
 SERVICE_NAME=""
 TEST_PATH=""
@@ -290,8 +293,13 @@ cleanup() {
     log_info "Cleanup: Cleaning up test jobs..."
     kubectl delete jobs -n "${NAMESPACE}" -l test-suite="${TEST_NAME}" --ignore-not-found=true || true
     
-    log_info "Cleanup: Cleaning up Kind cluster..."
-    kind delete cluster --name zerotouch-preview || true
+    if [[ "${CLEANUP_CLUSTER}" == "true" ]]; then
+        log_info "Cleanup: Cleaning up Kind cluster..."
+        kind delete cluster --name zerotouch-preview || true
+    else
+        log_info "Cleanup: Keeping cluster for debugging (set CLEANUP_CLUSTER=true to auto-cleanup)"
+        log_info "Cleanup: Manual cleanup: kind delete cluster --name zerotouch-preview"
+    fi
 }
 
 # Error handler
