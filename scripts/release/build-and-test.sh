@@ -78,7 +78,7 @@ parse_args() {
 execute_modular_build_test() {
     log_step_start "Executing modular build and test"
     
-    local helpers_dir="${SCRIPT_DIR}/helpers"
+    local helpers_dir="${SCRIPT_DIR}/helpers/build-and-test"
     
     # Pre-build setup
     log_info "Running pre-build setup..."

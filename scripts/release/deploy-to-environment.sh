@@ -13,10 +13,10 @@ source "${SCRIPT_DIR}/lib/config-discovery.sh"
 source "${SCRIPT_DIR}/lib/logging.sh"
 
 # Source helper modules
-source "${SCRIPT_DIR}/helpers/deployment-validator.sh"
-source "${SCRIPT_DIR}/helpers/repository-manager.sh"
-source "${SCRIPT_DIR}/helpers/kustomize-updater.sh"
-source "${SCRIPT_DIR}/helpers/pr-manager.sh"
+source "${SCRIPT_DIR}/helpers/deploy-to-environment/deployment-validator.sh"
+source "${SCRIPT_DIR}/helpers/deploy-to-environment/repository-manager.sh"
+source "${SCRIPT_DIR}/helpers/deploy-to-environment/kustomize-updater.sh"
+source "${SCRIPT_DIR}/helpers/deploy-to-environment/pr-manager.sh"
 
 # Default values
 TENANT=""
