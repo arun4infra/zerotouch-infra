@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-# release-pipeline.sh - GitOps-based deployment orchestration
-# Handles deployment to environments via Git commits (never touches clusters directly)
+# release-pipeline.sh - Release pipeline orchestrator
+# Handles deployment to environments via GitOps (never touches clusters directly)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLATFORM_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
@@ -11,6 +11,11 @@ PLATFORM_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/config-discovery.sh"
 source "${SCRIPT_DIR}/lib/logging.sh"
+
+# Source release-pipeline helper modules
+source "${SCRIPT_DIR}/helpers/release-pipeline/release-validator.sh"
+source "${SCRIPT_DIR}/helpers/release-pipeline/promotion-gate-manager.sh"
+source "${SCRIPT_DIR}/helpers/release-pipeline/argocd-monitor.sh"
 
 # Default values
 TENANT=""
@@ -22,7 +27,7 @@ usage() {
     cat << EOF
 Usage: $0 --tenant=<name> --environment=<env> [--artifact=<id>]
 
-GitOps-based deployment orchestration for centralized release pipeline.
+Release pipeline orchestrator for GitOps-based deployments.
 Updates tenant repository with new artifact tags, never touches clusters directly.
 
 Arguments:
@@ -82,9 +87,10 @@ parse_args() {
         exit 1
     fi
 
-    # Use artifact from environment if not specified
-    if [[ -z "$ARTIFACT" ]]; then
-        ARTIFACT="${ARTIFACT_ID:-}"
+    # Use ARTIFACT_ID environment variable if artifact not specified
+    if [[ -z "$ARTIFACT" ]] && [[ -n "${ARTIFACT_ID:-}" ]]; then
+        ARTIFACT="$ARTIFACT_ID"
+        log_info "Using artifact from environment: $ARTIFACT"
     fi
 
     if [[ -z "$ARTIFACT" ]]; then
@@ -94,155 +100,7 @@ parse_args() {
     fi
 }
 
-# Validate release pipeline environment
-validate_release_environment() {
-    log_step_start "Validating release pipeline environment"
-    
-    # Validate environment name
-    if ! validate_environment_name "$ENVIRONMENT"; then
-        return 1
-    fi
-    
-    # Check required environment variables
-    if [[ -z "${BOT_GITHUB_TOKEN:-}" ]]; then
-        log_error "BOT_GITHUB_TOKEN environment variable is required for tenant repository access"
-        return 1
-    fi
-    
-    # Check Git is available
-    if ! check_command git; then
-        return 1
-    fi
-    
-    # Validate tenant has release pipeline enabled (now that config is discovered)
-    if ! is_release_enabled; then
-        log_error "Release pipeline is not enabled for tenant: $TENANT"
-        return 1
-    fi
-    
-    log_step_end "Validating release pipeline environment" "SUCCESS"
-    return 0
-}
-
-# Check promotion gate requirements
-check_promotion_gate() {
-    log_step_start "Checking promotion gate requirements"
-    
-    local promotion_rule=""
-    
-    # Determine promotion rule based on target environment
-    case "$ENVIRONMENT" in
-        "dev")
-            # Dev environment typically has automatic deployment after main branch
-            promotion_rule="automatic"
-            ;;
-        "staging")
-            promotion_rule=$(get_tenant_release_config dev_to_staging)
-            ;;
-        "production")
-            promotion_rule=$(get_tenant_release_config staging_to_production)
-            ;;
-    esac
-    
-    log_info "Promotion rule for $ENVIRONMENT: $promotion_rule"
-    
-    if [[ "$promotion_rule" == "manual" ]]; then
-        log_info "Manual promotion gate required for environment: $ENVIRONMENT"
-        
-        # Create promotion gate (this would integrate with the XPromotionGate CRD)
-        if ! create_promotion_gate "$TENANT" "$ENVIRONMENT" "$ARTIFACT"; then
-            log_error "Failed to create promotion gate"
-            return 1
-        fi
-        
-        log_info "Promotion gate created, waiting for manual approval..."
-        # In a real implementation, this would wait for approval or return early
-        # For now, we'll simulate automatic approval for dev environment
-        if [[ "$ENVIRONMENT" == "dev" ]]; then
-            log_info "Auto-approving for dev environment (simulation)"
-        else
-            log_warn "Manual approval required - pipeline will wait"
-            return 0  # Return success but don't proceed with deployment
-        fi
-    fi
-    
-    log_step_end "Checking promotion gate requirements" "SUCCESS"
-    return 0
-}
-
-# Create promotion gate
-create_promotion_gate() {
-    local tenant="$1"
-    local target_env="$2"
-    local artifact="$3"
-    
-    local source_env=""
-    local gate_id
-    
-    # Determine source environment
-    case "$target_env" in
-        "staging")
-            source_env="dev"
-            ;;
-        "production")
-            source_env="staging"
-            ;;
-        *)
-            log_debug "No promotion gate needed for environment: $target_env"
-            return 0
-            ;;
-    esac
-    
-    gate_id=$(generate_id "gate")
-    
-    log_promotion_gate_info "$tenant" "$source_env" "$target_env" "$artifact" "$gate_id"
-    
-    # In a real implementation, this would create an XPromotionGate resource
-    # For now, we'll create a local gate file for tracking
-    local gate_file="${CONFIG_CACHE_DIR}/${tenant}-${source_env}-to-${target_env}-gate.json"
-    mkdir -p "$(dirname "$gate_file")"
-    
-    cat > "$gate_file" << EOF
-{
-  "gate_id": "$gate_id",
-  "tenant": "$tenant",
-  "artifact": "$artifact",
-  "source_environment": "$source_env",
-  "target_environment": "$target_env",
-  "status": "pending",
-  "created_at": "$(get_timestamp)",
-  "timeout_hours": 24
-}
-EOF
-    
-    log_info "Promotion gate created: $gate_file"
-    export PROMOTION_GATE_ID="$gate_id"
-    export PROMOTION_GATE_FILE="$gate_file"
-    
-    return 0
-}
-
-# Wait for ArgoCD sync (optional monitoring)
-wait_for_argocd_sync() {
-    log_step_start "Monitoring ArgoCD sync (optional)"
-    
-    log_info "GitOps deployment initiated for $TENANT in $ENVIRONMENT"
-    log_info "ArgoCD will automatically sync the changes"
-    log_info "Monitor deployment status in ArgoCD UI or via kubectl"
-    
-    # In a real implementation, this could:
-    # 1. Wait for ArgoCD Application to sync
-    # 2. Monitor deployment status
-    # 3. Run health checks
-    # 4. Report deployment success/failure
-    
-    log_info "Deployment monitoring can be implemented based on requirements"
-    
-    log_step_end "Monitoring ArgoCD sync (optional)" "SUCCESS"
-    return 0
-}
-
-# Main release pipeline execution
+# Main release pipeline orchestration
 main() {
     local start_time
     start_time=$(date +%s)
@@ -262,25 +120,25 @@ main() {
         exit 1
     fi
     
-    # Validate environment
+    # Step 1: Validate release environment
     if ! validate_release_environment; then
         log_error "Environment validation failed"
         exit 1
     fi
     
-    # Check promotion gate requirements
+    # Step 2: Check promotion gate requirements
     if ! check_promotion_gate; then
         log_info "Promotion gate check completed (may require manual approval)"
         # Don't exit here - the gate might be pending approval
     fi
     
-    # Deploy to environment using GitOps approach
+    # Step 3: Deploy to environment using GitOps approach
     if ! "${SCRIPT_DIR}/deploy-to-environment.sh" --tenant="$TENANT" --environment="$ENVIRONMENT" --artifact="$ARTIFACT"; then
         log_error "Failed to deploy to environment"
         exit 1
     fi
     
-    # Wait for ArgoCD sync (optional)
+    # Step 4: Monitor ArgoCD sync (optional)
     wait_for_argocd_sync
     
     local end_time
