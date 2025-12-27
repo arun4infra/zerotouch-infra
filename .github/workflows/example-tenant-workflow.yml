@@ -1,0 +1,56 @@
+# Example tenant workflow - Copy this to tenant repositories
+# Location: <tenant-repo>/.github/workflows/release.yml
+
+name: Release Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  # For PR workflows - only run build and test (no deployment)
+  pr-validation:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Service Code
+        uses: actions/checkout@v4
+        with:
+          path: service-code
+
+      - name: Checkout Platform Scripts
+        uses: actions/checkout@v4
+        with:
+          repository: arun4infra/zerotouch-platform
+          path: zerotouch-platform
+          ref: main
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Run CI Pipeline (Kind + Tests) - PR Validation Only
+        run: ./zerotouch-platform/scripts/bootstrap/preview/tenants/scripts/in-cluster-test.sh
+        working-directory: service-code
+        env:
+          BOT_GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+          BOT_GITHUB_USERNAME: ${{ github.actor }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+
+  # For main branch - full release pipeline with deployments
+  release-pipeline:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: arun4infra/zerotouch-platform/.github/workflows/pipeline.yml@main
+    secrets:
+      BOT_GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
