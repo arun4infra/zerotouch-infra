@@ -1,0 +1,92 @@
+name: Release Pipeline
+
+on:
+  workflow_call:
+    inputs:
+      service_name:
+        description: 'Service name (defaults to repository name)'
+        required: false
+        type: string
+        default: ${{ github.event.repository.name }}
+      image_tag:
+        description: 'Validated image tag to deploy'
+        required: true
+        type: string
+      tenant_repo_url:
+        description: 'Tenant repository URL'
+        required: false
+        type: string
+        default: 'https://github.com/arun4infra/zerotouch-tenants.git'
+    secrets:
+      BOT_GITHUB_TOKEN:
+        description: 'GitHub token for tenant repository access'
+        required: true
+      AWS_ACCESS_KEY_ID:
+        description: 'AWS Access Key ID for platform operations'
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        description: 'AWS Secret Access Key for platform operations'
+        required: true
+      AWS_SESSION_TOKEN:
+        description: 'AWS Session Token (for OIDC)'
+        required: false
+
+env:
+  SERVICE_NAME: ${{ inputs.service_name }}
+  TENANT_REPO_URL: ${{ inputs.tenant_repo_url }}
+
+jobs:
+  deploy-dev:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Platform Scripts
+        uses: actions/checkout@v4
+        with:
+          repository: arun4infra/zerotouch-platform
+          ref: main
+
+      - name: Deploy to Dev (Automatic)
+        run: ./scripts/release/deploy-direct.sh dev
+        env:
+          SERVICE_NAME: ${{ env.SERVICE_NAME }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          TENANT_REPO_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+          TENANT_REPO_URL: ${{ env.TENANT_REPO_URL }}
+
+  deploy-staging:
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+    environment: staging  # GitHub Environment Gate - Pauses for Manual Approval
+    steps:
+      - name: Checkout Platform Scripts
+        uses: actions/checkout@v4
+        with:
+          repository: arun4infra/zerotouch-platform
+          ref: main
+
+      - name: Deploy to Staging (Manual Approval Required)
+        run: ./scripts/release/deploy-direct.sh staging
+        env:
+          SERVICE_NAME: ${{ env.SERVICE_NAME }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          TENANT_REPO_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+          TENANT_REPO_URL: ${{ env.TENANT_REPO_URL }}
+
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production  # GitHub Environment Gate - Pauses for Manual Approval
+    steps:
+      - name: Checkout Platform Scripts
+        uses: actions/checkout@v4
+        with:
+          repository: arun4infra/zerotouch-platform
+          ref: main
+
+      - name: Deploy to Production (Manual Approval Required)
+        run: ./scripts/release/deploy-direct.sh production
+        env:
+          SERVICE_NAME: ${{ env.SERVICE_NAME }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          TENANT_REPO_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+          TENANT_REPO_URL: ${{ env.TENANT_REPO_URL }}
