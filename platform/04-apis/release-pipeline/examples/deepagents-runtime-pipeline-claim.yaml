@@ -1,0 +1,20 @@
+apiVersion: platform.zerotouch.dev/v1alpha1
+kind: XReleasePipeline
+metadata:
+  name: deepagents-runtime-pipeline
+  namespace: platform-system
+spec:
+  tenant: "deepagents-runtime"
+  environments:
+    - "dev"
+    - "staging"
+    - "production"
+  promotionRules:
+    dev_to_staging: "manual"
+    staging_to_production: "manual"
+  artifactConfig:
+    registry: "ghcr.io"
+    retention_days: 30
+  testing:
+    validation_mode: "preview"
+    bootstrap_mode: "preview"

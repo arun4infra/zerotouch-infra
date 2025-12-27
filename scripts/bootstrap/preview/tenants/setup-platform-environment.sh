@@ -12,6 +12,7 @@ set -euo pipefail
 SERVICE_NAME=""
 IMAGE_TAG="ci-test"
 BUILD_MODE="test"
+SKIP_BUILD=false  # New flag to skip build step
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Color codes
@@ -39,9 +40,13 @@ while [[ $# -gt 0 ]]; do
             BUILD_MODE="${1#*=}"
             shift
             ;;
+        --skip-build=*)
+            SKIP_BUILD="${1#*=}"
+            shift
+            ;;
         *)
             log_error "Unknown argument: $1"
-            echo "Usage: $0 --service=<service-name> [--image-tag=<tag>] [--build-mode=<mode>]"
+            echo "Usage: $0 --service=<service-name> [--image-tag=<tag>] [--build-mode=<mode>] [--skip-build=true|false]"
             exit 1
             ;;
     esac
@@ -59,6 +64,7 @@ echo "==========================================================================
 echo "  Service:    ${SERVICE_NAME}"
 echo "  Image Tag:  ${IMAGE_TAG}"
 echo "  Build Mode: ${BUILD_MODE}"
+echo "  Skip Build: ${SKIP_BUILD}"
 echo "================================================================================"
 
 # Ensure all platform scripts have execute permissions
@@ -137,11 +143,15 @@ kind create cluster --config /tmp/kind/config.yaml
 kubectl config use-context kind-zerotouch-preview
 kubectl label nodes --all workload.bizmatters.dev/databases=true --overwrite
 
-# Step 2: Build Docker image only (without loading into cluster)
-log_info "Step 2: Building Docker image..."
-export SERVICE_NAME="${SERVICE_NAME}"
-export BUILD_ONLY=true
-"${SCRIPT_DIR}/scripts/build.sh" --mode="${BUILD_MODE}"
+# Step 2: Build Docker image only (conditional on skip-build flag)
+if [[ "$SKIP_BUILD" != "true" ]]; then
+    log_info "Step 2: Building Docker image..."
+    export SERVICE_NAME="${SERVICE_NAME}"
+    export BUILD_ONLY=true
+    "${SCRIPT_DIR}/scripts/build.sh" --mode="${BUILD_MODE}"
+else
+    log_info "Step 2: Skipping build (using pre-built artifact: ${IMAGE_TAG})"
+fi
 
 # Step 3: Load Docker image into Kind cluster (now that cluster exists)
 log_info "Step 3: Loading Docker image into Kind cluster..."

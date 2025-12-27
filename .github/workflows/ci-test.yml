@@ -1,0 +1,138 @@
+name: CI Test
+
+on:
+  workflow_call:
+    inputs:
+      image_tag:
+        description: 'Container image tag to test'
+        required: true
+        type: string
+      test_suite:
+        description: 'Test suite path (e.g., tests/integration/nats_events)'
+        required: true
+        type: string
+      test_name:
+        description: 'Test name identifier'
+        required: false
+        type: string
+        default: 'integration-test'
+      timeout:
+        description: 'Test timeout in minutes'
+        required: false
+        type: number
+        default: 30
+      use_real_llm:
+        description: 'Whether to use real LLM APIs'
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      BOT_GITHUB_TOKEN:
+        description: 'GitHub token for platform access'
+        required: true
+      BOT_GITHUB_USERNAME:
+        description: 'GitHub username for platform access'
+        required: false
+      AWS_ROLE_ARN:
+        description: 'AWS role ARN for OIDC authentication'
+        required: true
+      OPENAI_API_KEY:
+        description: 'OpenAI API key for LLM tests'
+        required: false
+      ANTHROPIC_API_KEY:
+        description: 'Anthropic API key for LLM tests'
+        required: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout }}
+    steps:
+      - name: Checkout Service Code
+        uses: actions/checkout@v4
+        with:
+          path: service-code
+
+      - name: Checkout Platform Scripts
+        uses: actions/checkout@v4
+        with:
+          repository: arun4infra/zerotouch-platform
+          path: zerotouch-platform
+          ref: main
+          token: ${{ secrets.BOT_GITHUB_TOKEN }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-south-1
+          mask-aws-account-id: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.BOT_GITHUB_TOKEN }}
+
+      - name: Pull Test Image
+        run: |
+          echo "Pulling test image: ${{ inputs.image_tag }}"
+          docker pull ${{ inputs.image_tag }}
+          echo "✅ Image pulled successfully"
+
+      - name: Setup Test Environment
+        working-directory: service-code
+        run: |
+          # Override image tag in ci/config.yaml for testing
+          if [[ -f ci/config.yaml ]]; then
+            # Extract image name from full tag
+            IMAGE_NAME=$(echo "${{ inputs.image_tag }}" | cut -d':' -f1)
+            IMAGE_TAG=$(echo "${{ inputs.image_tag }}" | cut -d':' -f2)
+            
+            # Update config to use the specific test image
+            if command -v yq &> /dev/null; then
+              yq eval ".build.image = \"${IMAGE_NAME}\"" -i ci/config.yaml
+              yq eval ".build.tag = \"${IMAGE_TAG}\"" -i ci/config.yaml
+            else
+              echo "Warning: yq not available, using sed fallback"
+              sed -i "s|tag:.*|tag: \"${IMAGE_TAG}\"|" ci/config.yaml
+            fi
+            
+            echo "Updated ci/config.yaml to use test image: ${{ inputs.image_tag }}"
+          fi
+
+      - name: Run Integration Tests
+        working-directory: service-code
+        env:
+          BOT_GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+          BOT_GITHUB_USERNAME: ${{ secrets.BOT_GITHUB_USERNAME }}
+          TENANTS_REPO_NAME: ${{ secrets.TENANTS_REPO_NAME }}
+          TEST_PATH: ${{ inputs.test_suite }}
+          TEST_NAME: ${{ inputs.test_name }}
+          USE_REAL_LLM: ${{ inputs.use_real_llm }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Override image for in-cluster testing
+          OVERRIDE_IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          echo "🧪 Running test suite: ${{ inputs.test_suite }}"
+          echo "📦 Using image: ${{ inputs.image_tag }}"
+          echo "🏷️  Test name: ${{ inputs.test_name }}"
+          
+          # Make platform script executable
+          chmod +x ../zerotouch-platform/scripts/bootstrap/preview/tenants/scripts/in-cluster-test.sh
+          
+          # Run the centralized test script
+          ../zerotouch-platform/scripts/bootstrap/preview/tenants/scripts/in-cluster-test.sh
+
+      - name: Cleanup
+        if: always()
+        run: |
+          # Cleanup Kind cluster
+          kind delete cluster --name zerotouch-preview || true
+          
+          echo "✅ Test cleanup completed"

@@ -1,0 +1,195 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: release-pipeline-composition
+  labels:
+    provider: platform
+    service: release-pipeline
+spec:
+  compositeTypeRef:
+    apiVersion: platform.zerotouch.dev/v1alpha1
+    kind: XReleasePipeline
+  
+  resources:
+  # ConfigMap to store pipeline configuration
+  - name: pipeline-config
+    base:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: # patched
+        namespace: platform-system
+      data:
+        tenant: # patched
+        environments: # patched
+        promotion-rules: # patched
+        artifact-config: # patched
+        testing-config: # patched
+    patches:
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.tenant
+      toFieldPath: metadata.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-release-pipeline-config"
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.tenant
+      toFieldPath: data.tenant
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.environments
+      toFieldPath: data.environments
+      transforms:
+      - type: convert
+        convert:
+          toType: string
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.promotionRules
+      toFieldPath: data.promotion-rules
+      transforms:
+      - type: convert
+        convert:
+          toType: string
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.artifactConfig
+      toFieldPath: data.artifact-config
+      transforms:
+      - type: convert
+        convert:
+          toType: string
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.testing
+      toFieldPath: data.testing-config
+      transforms:
+      - type: convert
+        convert:
+          toType: string
+
+  # Secret for pipeline credentials (references AWS SSM)
+  - name: pipeline-credentials
+    base:
+      apiVersion: external-secrets.io/v1beta1
+      kind: ExternalSecret
+      metadata:
+        name: # patched
+        namespace: platform-system
+      spec:
+        refreshInterval: 1h
+        secretStoreRef:
+          name: aws-parameter-store
+          kind: ClusterSecretStore
+        target:
+          name: # patched
+          creationPolicy: Owner
+        data:
+        - secretKey: github-token
+          remoteRef:
+            key: /zerotouch/prod/release-pipeline/github-token
+        - secretKey: registry-token
+          remoteRef:
+            key: /zerotouch/prod/release-pipeline/registry-token
+    patches:
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.tenant
+      toFieldPath: metadata.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-release-pipeline-credentials"
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.tenant
+      toFieldPath: spec.target.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-release-pipeline-credentials"
+
+  # ServiceAccount for pipeline execution
+  - name: pipeline-service-account
+    base:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: # patched
+        namespace: platform-system
+        annotations:
+          eks.amazonaws.com/role-arn: # patched
+    patches:
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.tenant
+      toFieldPath: metadata.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-release-pipeline-sa"
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.tenant
+      toFieldPath: metadata.annotations["eks.amazonaws.com/role-arn"]
+      transforms:
+      - type: string
+        string:
+          fmt: "arn:aws:iam::ACCOUNT_ID:role/%s-release-pipeline-role"
+
+  # ClusterRole for pipeline operations
+  - name: pipeline-cluster-role
+    base:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRole
+      metadata:
+        name: # patched
+      rules:
+      - apiGroups: [""]
+        resources: ["configmaps", "secrets"]
+        verbs: ["get", "list", "watch", "create", "update", "patch"]
+      - apiGroups: ["apps"]
+        resources: ["deployments", "replicasets"]
+        verbs: ["get", "list", "watch", "create", "update", "patch"]
+      - apiGroups: ["platform.zerotouch.dev"]
+        resources: ["xpromotiongates"]
+        verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+    patches:
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.tenant
+      toFieldPath: metadata.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-release-pipeline-role"
+
+  # ClusterRoleBinding
+  - name: pipeline-cluster-role-binding
+    base:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        name: # patched
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: # patched
+      subjects:
+      - kind: ServiceAccount
+        name: # patched
+        namespace: platform-system
+    patches:
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.tenant
+      toFieldPath: metadata.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-release-pipeline-binding"
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.tenant
+      toFieldPath: roleRef.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-release-pipeline-role"
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.tenant
+      toFieldPath: subjects[0].name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-release-pipeline-sa"

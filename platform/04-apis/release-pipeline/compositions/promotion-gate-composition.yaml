@@ -1,0 +1,210 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: promotion-gate-composition
+  labels:
+    provider: platform
+    service: promotion-gate
+spec:
+  compositeTypeRef:
+    apiVersion: platform.zerotouch.dev/v1alpha1
+    kind: XPromotionGate
+  
+  resources:
+  # ConfigMap to store gate configuration and status
+  - name: gate-config
+    base:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: # patched
+        namespace: platform-system
+        labels:
+          app.kubernetes.io/name: promotion-gate
+          app.kubernetes.io/component: gate-config
+      data:
+        tenant: # patched
+        artifact_id: # patched
+        source_environment: # patched
+        target_environment: # patched
+        approval_required: # patched
+        timeout_hours: # patched
+        gate_status: "pending"
+        created_timestamp: # patched
+    patches:
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.tenant
+      toFieldPath: metadata.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-%s-to-%s-gate"
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.source_environment
+      toFieldPath: metadata.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-%s-to-%s-gate"
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.target_environment
+      toFieldPath: metadata.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-%s-to-%s-gate"
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.tenant
+      toFieldPath: data.tenant
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.artifact_id
+      toFieldPath: data.artifact_id
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.source_environment
+      toFieldPath: data.source_environment
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.target_environment
+      toFieldPath: data.target_environment
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.approval_required
+      toFieldPath: data.approval_required
+      transforms:
+      - type: convert
+        convert:
+          toType: string
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.timeout_hours
+      toFieldPath: data.timeout_hours
+      transforms:
+      - type: convert
+        convert:
+          toType: string
+
+  # Job to handle gate timeout logic
+  - name: gate-timeout-job
+    base:
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: # patched
+        namespace: platform-system
+      spec:
+        ttlSecondsAfterFinished: 86400 # 24 hours
+        template:
+          spec:
+            restartPolicy: OnFailure
+            containers:
+            - name: gate-timeout
+              image: alpine:3.18
+              command:
+              - /bin/sh
+              - -c
+              - |
+                echo "Promotion gate timeout job started"
+                TIMEOUT_SECONDS=$((TIMEOUT_HOURS * 3600))
+                echo "Waiting ${TIMEOUT_SECONDS} seconds for approval..."
+                sleep ${TIMEOUT_SECONDS}
+                echo "Timeout reached, marking gate as timed out"
+                # In a real implementation, this would update the gate status
+                exit 0
+              env:
+              - name: TIMEOUT_HOURS
+                valueFrom:
+                  configMapKeyRef:
+                    name: # patched
+                    key: timeout_hours
+              - name: TENANT
+                valueFrom:
+                  configMapKeyRef:
+                    name: # patched
+                    key: tenant
+              - name: ARTIFACT_ID
+                valueFrom:
+                  configMapKeyRef:
+                    name: # patched
+                    key: artifact_id
+    patches:
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.tenant
+      toFieldPath: metadata.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-%s-to-%s-timeout"
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.source_environment
+      toFieldPath: metadata.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-%s-to-%s-timeout"
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.target_environment
+      toFieldPath: metadata.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-%s-to-%s-timeout"
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.tenant
+      toFieldPath: spec.template.spec.containers[0].env[1].valueFrom.configMapKeyRef.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-%s-to-%s-gate"
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.source_environment
+      toFieldPath: spec.template.spec.containers[0].env[1].valueFrom.configMapKeyRef.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-%s-to-%s-gate"
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.target_environment
+      toFieldPath: spec.template.spec.containers[0].env[1].valueFrom.configMapKeyRef.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-%s-to-%s-gate"
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.tenant
+      toFieldPath: spec.template.spec.containers[0].env[2].valueFrom.configMapKeyRef.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-%s-to-%s-gate"
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.source_environment
+      toFieldPath: spec.template.spec.containers[0].env[2].valueFrom.configMapKeyRef.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-%s-to-%s-gate"
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.target_environment
+      toFieldPath: spec.template.spec.containers[0].env[2].valueFrom.configMapKeyRef.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-%s-to-%s-gate"
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.tenant
+      toFieldPath: spec.template.spec.containers[0].env[0].valueFrom.configMapKeyRef.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-%s-to-%s-gate"
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.source_environment
+      toFieldPath: spec.template.spec.containers[0].env[0].valueFrom.configMapKeyRef.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-%s-to-%s-gate"
+    - type: FromCompositeFieldPath
+      fromFieldPath: spec.target_environment
+      toFieldPath: spec.template.spec.containers[0].env[0].valueFrom.configMapKeyRef.name
+      transforms:
+      - type: string
+        string:
+          fmt: "%s-%s-to-%s-gate"

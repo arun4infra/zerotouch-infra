@@ -1,0 +1,80 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xpromotiongates.platform.zerotouch.dev
+spec:
+  group: platform.zerotouch.dev
+  names:
+    kind: XPromotionGate
+    plural: xpromotiongates
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              tenant:
+                type: string
+                description: "Tenant identifier"
+              artifact_id:
+                type: string
+                description: "Artifact identifier to promote"
+              source_environment:
+                type: string
+                description: "Source environment"
+                enum: ["dev", "staging"]
+              target_environment:
+                type: string
+                description: "Target environment"
+                enum: ["staging", "production"]
+              approval_required:
+                type: boolean
+                description: "Whether manual approval is required"
+                default: true
+              timeout_hours:
+                type: integer
+                description: "Hours to wait for approval before timeout"
+                default: 24
+                minimum: 1
+                maximum: 168
+            required:
+            - tenant
+            - artifact_id
+            - source_environment
+            - target_environment
+          status:
+            type: object
+            properties:
+              conditions:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                    status:
+                      type: string
+                    reason:
+                      type: string
+                    message:
+                      type: string
+              gate_status:
+                type: string
+                description: "Current gate status"
+                enum: ["pending", "approved", "rejected", "timeout"]
+              approver:
+                type: string
+                description: "User who approved/rejected the gate"
+              approval_timestamp:
+                type: string
+                format: date-time
+                description: "When the gate was approved/rejected"
+              created_timestamp:
+                type: string
+                format: date-time
+                description: "When the gate was created"

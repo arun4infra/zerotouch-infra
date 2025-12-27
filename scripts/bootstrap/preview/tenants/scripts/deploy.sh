@@ -128,8 +128,18 @@ fi
 # Update image tag if provided
 if [[ "${IMAGE_TAG}" != "latest" ]]; then
     echo "🏷️  Updating image tag to ${IMAGE_TAG}..."
+    
+    # Determine if this is a full registry image or just a tag
+    if [[ "$IMAGE_TAG" == *"ghcr.io"* || "$IMAGE_TAG" == *"/"* ]]; then
+        # This is a full registry image (e.g., ghcr.io/arun4infra/service:sha-123)
+        FULL_IMAGE_NAME="$IMAGE_TAG"
+    else
+        # This is just a tag (e.g., ci-test)
+        FULL_IMAGE_NAME="${SERVICE_NAME}:${IMAGE_TAG}"
+    fi
+    
     kubectl set image deployment/${SERVICE_NAME} \
-        ${SERVICE_NAME}="${SERVICE_NAME}:${IMAGE_TAG}" \
+        ${SERVICE_NAME}="${FULL_IMAGE_NAME}" \
         -n "${NAMESPACE}"
 fi
 
