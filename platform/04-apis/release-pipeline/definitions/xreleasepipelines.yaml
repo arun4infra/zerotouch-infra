@@ -1,0 +1,97 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xreleasepipelines.platform.zerotouch.dev
+spec:
+  group: platform.zerotouch.dev
+  names:
+    kind: XReleasePipeline
+    plural: xreleasepipelines
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              tenant:
+                type: string
+                description: "Tenant identifier for the release pipeline"
+              environments:
+                type: array
+                description: "Ordered list of target environments"
+                items:
+                  type: string
+                  enum: ["dev", "staging", "production"]
+              promotionRules:
+                type: object
+                description: "Manual/automatic promotion rules between environments"
+                properties:
+                  dev_to_staging:
+                    type: string
+                    enum: ["manual", "automatic"]
+                    default: "manual"
+                  staging_to_production:
+                    type: string
+                    enum: ["manual", "automatic"]
+                    default: "manual"
+              artifactConfig:
+                type: object
+                description: "Registry and retention settings for artifacts"
+                properties:
+                  registry:
+                    type: string
+                    description: "Container registry URL"
+                    default: "ghcr.io"
+                  retention_days:
+                    type: integer
+                    description: "Number of days to retain artifacts"
+                    default: 30
+                    minimum: 1
+                    maximum: 365
+              testing:
+                type: object
+                description: "Testing configuration for the pipeline"
+                properties:
+                  validation_mode:
+                    type: string
+                    description: "Validation mode for both PR and main branch testing"
+                    enum: ["preview"]
+                    default: "preview"
+                  bootstrap_mode:
+                    type: string
+                    description: "Bootstrap mode for testing infrastructure"
+                    enum: ["preview"]
+                    default: "preview"
+            required:
+            - tenant
+            - environments
+          status:
+            type: object
+            properties:
+              conditions:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                    status:
+                      type: string
+                    reason:
+                      type: string
+                    message:
+                      type: string
+              pipeline_id:
+                type: string
+                description: "Current pipeline execution ID"
+              current_environment:
+                type: string
+                description: "Current deployment environment"
+              artifact_id:
+                type: string
+                description: "Current artifact identifier"

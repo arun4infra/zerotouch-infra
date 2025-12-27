@@ -1,0 +1,12 @@
+apiVersion: platform.zerotouch.dev/v1alpha1
+kind: XPromotionGate
+metadata:
+  name: deepagents-runtime-dev-to-staging
+  namespace: platform-system
+spec:
+  tenant: "deepagents-runtime"
+  artifact_id: "ghcr.io/org/deepagents-runtime:main-abc123"
+  source_environment: "dev"
+  target_environment: "staging"
+  approval_required: true
+  timeout_hours: 24
