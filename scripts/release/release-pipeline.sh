@@ -114,7 +114,7 @@ validate_release_environment() {
         return 1
     fi
     
-    # Validate tenant has release pipeline enabled
+    # Validate tenant has release pipeline enabled (now that config is discovered)
     if ! is_release_enabled; then
         log_error "Release pipeline is not enabled for tenant: $TENANT"
         return 1
@@ -222,161 +222,6 @@ EOF
     return 0
 }
 
-# Clone tenant repository for GitOps updates
-clone_tenant_repository() {
-    log_step_start "Cloning tenant repository for GitOps updates"
-    
-    local tenant_repo_url
-    local clone_dir
-    
-    # In a real implementation, this would be discovered from zerotouch-tenants
-    # For now, construct the URL based on tenant name
-    tenant_repo_url="https://github.com/org/${TENANT}.git"
-    clone_dir="${CONFIG_CACHE_DIR}/${TENANT}-repo"
-    
-    log_info "Cloning tenant repository: $tenant_repo_url"
-    log_info "Clone directory: $clone_dir"
-    
-    # Remove existing clone if it exists
-    if [[ -d "$clone_dir" ]]; then
-        rm -rf "$clone_dir"
-    fi
-    
-    # Clone the repository
-    if ! log_command "git clone https://${BOT_GITHUB_TOKEN}@github.com/org/${TENANT}.git $clone_dir"; then
-        log_error "Failed to clone tenant repository"
-        return 1
-    fi
-    
-    # Change to repository directory
-    cd "$clone_dir"
-    
-    # Configure Git user
-    git config user.name "Release Pipeline Bot"
-    git config user.email "release-pipeline@zerotouch.dev"
-    
-    export TENANT_REPO_DIR="$clone_dir"
-    
-    log_step_end "Cloning tenant repository for GitOps updates" "SUCCESS"
-    return 0
-}
-
-# Update deployment manifests with new artifact
-update_deployment_manifests() {
-    log_step_start "Updating deployment manifests with new artifact"
-    
-    local manifest_dir="${TENANT_REPO_DIR}/platform/claims"
-    local overlay_dir="${TENANT_REPO_DIR}/overlays/${ENVIRONMENT}"
-    
-    log_info "Updating manifests for environment: $ENVIRONMENT"
-    log_info "Artifact: $ARTIFACT"
-    
-    # Look for deployment manifests in common locations
-    local manifest_files=()
-    
-    # Check platform claims directory
-    if [[ -d "$manifest_dir" ]]; then
-        while IFS= read -r -d '' file; do
-            manifest_files+=("$file")
-        done < <(find "$manifest_dir" -name "*.yaml" -o -name "*.yml" -print0)
-    fi
-    
-    # Check overlays directory
-    if [[ -d "$overlay_dir" ]]; then
-        while IFS= read -r -d '' file; do
-            manifest_files+=("$file")
-        done < <(find "$overlay_dir" -name "*.yaml" -o -name "*.yml" -print0)
-    fi
-    
-    if [[ ${#manifest_files[@]} -eq 0 ]]; then
-        log_error "No deployment manifests found in $manifest_dir or $overlay_dir"
-        return 1
-    fi
-    
-    log_info "Found ${#manifest_files[@]} manifest files to update"
-    
-    # Update image references in manifest files
-    local updated_files=0
-    for manifest_file in "${manifest_files[@]}"; do
-        log_debug "Processing manifest: $manifest_file"
-        
-        # Update image references (this is a simplified approach)
-        # In a real implementation, this would use yq or a more sophisticated tool
-        if grep -q "image:.*${TENANT}" "$manifest_file"; then
-            log_info "Updating image reference in: $manifest_file"
-            
-            # Create backup
-            cp "$manifest_file" "${manifest_file}.backup"
-            
-            # Update image reference
-            sed -i.tmp "s|image:.*${TENANT}:.*|image: ${ARTIFACT}|g" "$manifest_file"
-            rm -f "${manifest_file}.tmp"
-            
-            ((updated_files++))
-        fi
-    done
-    
-    if [[ $updated_files -eq 0 ]]; then
-        log_warn "No manifest files were updated (no matching image references found)"
-    else
-        log_info "Updated $updated_files manifest files"
-    fi
-    
-    log_step_end "Updating deployment manifests with new artifact" "SUCCESS"
-    return 0
-}
-
-# Commit and push GitOps changes
-commit_and_push_changes() {
-    log_step_start "Committing and pushing GitOps changes"
-    
-    cd "$TENANT_REPO_DIR"
-    
-    # Check if there are any changes
-    if ! git diff --quiet; then
-        log_info "Changes detected, committing and pushing..."
-        
-        # Add all changes
-        git add .
-        
-        # Create commit message
-        local commit_message="Deploy ${TENANT} to ${ENVIRONMENT}
-
-Artifact: ${ARTIFACT}
-Environment: ${ENVIRONMENT}
-Deployed by: Release Pipeline
-Timestamp: $(get_timestamp)
-"
-        
-        # Commit changes
-        if ! log_command "git commit -m \"$commit_message\""; then
-            log_error "Failed to commit changes"
-            return 1
-        fi
-        
-        # Push changes
-        if ! log_command "git push origin main"; then
-            log_error "Failed to push changes"
-            return 1
-        fi
-        
-        # Get commit SHA for tracking
-        local commit_sha
-        commit_sha=$(git rev-parse HEAD)
-        
-        log_deployment_info "$TENANT" "$ENVIRONMENT" "$ARTIFACT"
-        log_info "GitOps commit SHA: $commit_sha"
-        
-        export DEPLOYMENT_COMMIT_SHA="$commit_sha"
-        
-    else
-        log_info "No changes detected, skipping commit"
-    fi
-    
-    log_step_end "Committing and pushing GitOps changes" "SUCCESS"
-    return 0
-}
-
 # Wait for ArgoCD sync (optional monitoring)
 wait_for_argocd_sync() {
     log_step_start "Monitoring ArgoCD sync (optional)"
@@ -411,6 +256,12 @@ main() {
     # Log environment information
     log_environment
     
+    # Discover tenant configuration first
+    if ! discover_tenant_config "$TENANT"; then
+        log_error "Failed to discover tenant configuration"
+        exit 1
+    fi
+    
     # Validate environment
     if ! validate_release_environment; then
         log_error "Environment validation failed"
@@ -423,21 +274,9 @@ main() {
         # Don't exit here - the gate might be pending approval
     fi
     
-    # Clone tenant repository for GitOps updates
-    if ! clone_tenant_repository; then
-        log_error "Failed to clone tenant repository"
-        exit 1
-    fi
-    
-    # Update deployment manifests
-    if ! update_deployment_manifests; then
-        log_error "Failed to update deployment manifests"
-        exit 1
-    fi
-    
-    # Commit and push changes
-    if ! commit_and_push_changes; then
-        log_error "Failed to commit and push changes"
+    # Deploy to environment using GitOps approach
+    if ! "${SCRIPT_DIR}/deploy-to-environment.sh" --tenant="$TENANT" --environment="$ENVIRONMENT" --artifact="$ARTIFACT"; then
+        log_error "Failed to deploy to environment"
         exit 1
     fi
     

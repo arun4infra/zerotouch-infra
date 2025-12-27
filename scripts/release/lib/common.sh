@@ -209,8 +209,32 @@ get_tenant_root() {
     if is_github_actions; then
         echo "${GITHUB_WORKSPACE:-$(pwd)}"
     else
-        # For local testing, assume we're in the tenant directory
-        pwd
+        # For local testing, try to find the tenant directory intelligently
+        local current_dir="$(pwd)"
+        local tenant_name="${TENANT:-}"
+        
+        # If we're already in a tenant directory, use it
+        if [[ -f "ci/config.yaml" ]]; then
+            echo "$current_dir"
+            return 0
+        fi
+        
+        # If TENANT is set, try to find it relative to platform root
+        if [[ -n "$tenant_name" ]]; then
+            local platform_root
+            platform_root=$(get_platform_root)
+            local workspace_root
+            workspace_root=$(cd "${platform_root}/.." && pwd)
+            local tenant_dir="${workspace_root}/${tenant_name}"
+            
+            if [[ -d "$tenant_dir" && -f "${tenant_dir}/ci/config.yaml" ]]; then
+                echo "$tenant_dir"
+                return 0
+            fi
+        fi
+        
+        # Fallback to current directory
+        echo "$current_dir"
     fi
 }
 
