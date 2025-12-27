@@ -56,10 +56,21 @@ echo "  Image Tag: ${IMAGE_TAG}"
 echo "  Cluster:   ${CLUSTER_NAME}"
 echo "================================================================================"
 
+# Determine if this is a registry image (contains registry URL) or local image
+if [[ "$IMAGE_TAG" == *"ghcr.io"* || "$IMAGE_TAG" == *":"* ]]; then
+    # This is a full registry image tag (e.g., ghcr.io/arun4infra/service:sha-123)
+    FULL_IMAGE_NAME="$IMAGE_TAG"
+    log_info "Loading registry image: $FULL_IMAGE_NAME"
+else
+    # This is a local image tag (e.g., ci-test)
+    FULL_IMAGE_NAME="${SERVICE_NAME}:${IMAGE_TAG}"
+    log_info "Loading local image: $FULL_IMAGE_NAME"
+fi
+
 log_info "Loading image into Kind cluster..."
-if ! kind load docker-image "${SERVICE_NAME}:${IMAGE_TAG}" --name "${CLUSTER_NAME}"; then
+if ! kind load docker-image "$FULL_IMAGE_NAME" --name "${CLUSTER_NAME}"; then
     log_error "Failed to load image into Kind cluster"
     exit 1
 fi
 
-log_success "Image loaded successfully into Kind cluster: ${SERVICE_NAME}:${IMAGE_TAG}"
+log_success "Image loaded successfully into Kind cluster: $FULL_IMAGE_NAME"

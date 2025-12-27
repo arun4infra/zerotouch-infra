@@ -346,28 +346,41 @@ trap cleanup EXIT
         log_info "Skipping Docker registry authentication (not in CI or credentials not available)"
     fi
     
-    # Step 3b: Build service image (Platform auto-detects mode)
-    log_info "Building service image..."
-    BUILD_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/build-service.sh"
-    if [[ -f "$BUILD_SCRIPT" ]]; then
-        chmod +x "$BUILD_SCRIPT"
-        # Run build script from service directory
-        "$BUILD_SCRIPT" "${SERVICE_NAME}"
-        
-        # Read back vars (For local run, we manually set defaults if GITHUB_OUTPUT missing)
-        if [[ -f "${GITHUB_OUTPUT:-}" ]]; then
-            BUILD_MODE=$(grep "BUILD_MODE=" "$GITHUB_OUTPUT" | cut -d'=' -f2 || echo "test")
-            IMAGE_TAG=$(grep "IMAGE_TAG=" "$GITHUB_OUTPUT" | cut -d'=' -f2 || echo "ci-test")
+    # Step 3b: Build service image (Platform auto-detects mode) - Skip if using pre-built artifact
+    if [[ -n "${OVERRIDE_IMAGE_TAG:-}" ]]; then
+        log_info "Skipping service build - using pre-built artifact: ${OVERRIDE_IMAGE_TAG}"
+        # Set the build variables for downstream scripts
+        if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+            echo "BUILD_MODE=artifact" >> "$GITHUB_OUTPUT"
+            echo "IMAGE_TAG=${OVERRIDE_IMAGE_TAG}" >> "$GITHUB_OUTPUT"
         else
-            # Fallback for local execution if not in GHA
-            BUILD_MODE="test"
-            IMAGE_TAG="ci-test"
+            # Fallback for local execution
+            BUILD_MODE="artifact"
+            IMAGE_TAG="${OVERRIDE_IMAGE_TAG}"
         fi
-        
-        log_success "Build completed - Mode: $BUILD_MODE, Tag: $IMAGE_TAG"
     else
-        log_error "Build script not found: $BUILD_SCRIPT"
-        exit 1
+        log_info "Building service image..."
+        BUILD_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/build-service.sh"
+        if [[ -f "$BUILD_SCRIPT" ]]; then
+            chmod +x "$BUILD_SCRIPT"
+            # Run build script from service directory
+            "$BUILD_SCRIPT" "${SERVICE_NAME}"
+            
+            # Read back vars (For local run, we manually set defaults if GITHUB_OUTPUT missing)
+            if [[ -f "${GITHUB_OUTPUT:-}" ]]; then
+                BUILD_MODE=$(grep "BUILD_MODE=" "$GITHUB_OUTPUT" | cut -d'=' -f2 || echo "test")
+                IMAGE_TAG=$(grep "IMAGE_TAG=" "$GITHUB_OUTPUT" | cut -d'=' -f2 || echo "ci-test")
+            else
+                # Fallback for local execution if not in GHA
+                BUILD_MODE="test"
+                IMAGE_TAG="ci-test"
+            fi
+            
+            log_success "Build completed - Mode: $BUILD_MODE, Tag: $IMAGE_TAG"
+        else
+            log_error "Build script not found: $BUILD_SCRIPT"
+            exit 1
+        fi
     fi
 
     # Step 3c: Patch service deployment manifests
@@ -375,8 +388,10 @@ trap cleanup EXIT
     PATCH_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/patch-service-images.sh"
     if [[ -f "$PATCH_SCRIPT" ]]; then
         chmod +x "$PATCH_SCRIPT"
+        # Use the final image tag (either from build or override)
+        FINAL_IMAGE_TAG="${OVERRIDE_IMAGE_TAG:-$IMAGE_TAG}"
         # Run patch script from service directory to access platform/claims
-        "$PATCH_SCRIPT" "${SERVICE_NAME}" "${BUILD_MODE}" "${IMAGE_TAG}"
+        "$PATCH_SCRIPT" "${SERVICE_NAME}" "${BUILD_MODE}" "${FINAL_IMAGE_TAG}"
         log_success "Manifest patching completed"
     else
         log_error "Patch script not found: $PATCH_SCRIPT"
@@ -398,11 +413,16 @@ trap cleanup EXIT
         exit 1
     fi
     
+    # Determine which tag to deploy
+    FINAL_IMAGE_TAG="${OVERRIDE_IMAGE_TAG:-$IMAGE_TAG}"
+    
     # Deploy service
     DEPLOY_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/deploy.sh"
     if [[ -f "$DEPLOY_SCRIPT" ]]; then
         chmod +x "$DEPLOY_SCRIPT"
-        "$DEPLOY_SCRIPT"
+        # CHANGE: Explicitly pass the calculated tag to deploy.sh
+        # deploy.sh accepts: $1=ENVIRONMENT, $2=IMAGE_TAG
+        "$DEPLOY_SCRIPT" "preview" "$FINAL_IMAGE_TAG"
     else
         log_error "Deploy script not found: $DEPLOY_SCRIPT"
         exit 1
@@ -439,7 +459,9 @@ trap cleanup EXIT
         TEST_JOB_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/scripts/run-test-job.sh"
         if [[ -f "$TEST_JOB_SCRIPT" ]]; then
             chmod +x "$TEST_JOB_SCRIPT"
-            if "$TEST_JOB_SCRIPT" "${TEST_PATH}" "${TEST_NAME}" "${TIMEOUT}" "${NAMESPACE}" "${IMAGE_TAG}"; then
+            # Use the final image tag (either from build or override)
+            FINAL_IMAGE_TAG="${OVERRIDE_IMAGE_TAG:-$IMAGE_TAG}"
+            if "$TEST_JOB_SCRIPT" "${TEST_PATH}" "${TEST_NAME}" "${TIMEOUT}" "${NAMESPACE}" "${FINAL_IMAGE_TAG}"; then
                 log_success "✅ In-cluster tests completed successfully!"
             else
                 log_error "❌ In-cluster tests failed!"
@@ -490,7 +512,20 @@ setup_ci_infrastructure() {
     PLATFORM_SETUP_SCRIPT="${PLATFORM_ROOT}/scripts/bootstrap/preview/tenants/setup-platform-environment.sh"
     if [[ -f "$PLATFORM_SETUP_SCRIPT" ]]; then
         chmod +x "$PLATFORM_SETUP_SCRIPT"
-        "$PLATFORM_SETUP_SCRIPT" --service="${SERVICE_NAME}" --image-tag="${IMAGE_TAG}"
+        # CHANGE: Check for OVERRIDE_IMAGE_TAG env var (passed from GitHub Actions)
+        if [[ -n "${OVERRIDE_IMAGE_TAG:-}" ]]; then
+            log_info "Using pre-built artifact: ${OVERRIDE_IMAGE_TAG}. Skipping local build."
+            # Use a new flag --skip-build to tell the setup script to ONLY do cluster setup & loading
+            "$PLATFORM_SETUP_SCRIPT" \
+                --service="${SERVICE_NAME}" \
+                --image-tag="${OVERRIDE_IMAGE_TAG}" \
+                --skip-build=true
+        else
+            # Default behavior (Builds locally)
+            "$PLATFORM_SETUP_SCRIPT" \
+                --service="${SERVICE_NAME}" \
+                --image-tag="${IMAGE_TAG}"
+        fi
     else
         log_error "Platform setup script not found: $PLATFORM_SETUP_SCRIPT"
         exit 1
