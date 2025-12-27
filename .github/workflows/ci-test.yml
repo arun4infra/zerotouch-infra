@@ -42,6 +42,14 @@ on:
       ANTHROPIC_API_KEY:
         description: 'Anthropic API key for LLM tests'
         required: false
+      TENANTS_REPO_NAME:
+        description: 'Tenant repository name for platform operations'
+        required: false
+
+permissions:
+  id-token: write      # Required for AWS OIDC authentication
+  contents: read
+  pull-requests: write
 
 jobs:
   test:
